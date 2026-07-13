@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 venv/
 *.log
+*.db
 
 # C++ Build
 backend/cpp/build/
