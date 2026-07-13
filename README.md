@@ -1,10 +1,5 @@
 # 🏭 通用流处理任务管理平台
 
-> 外包竞赛作品 · 邦盛科技 A22 赛题<br>
-> Competition Entry · Bangsheng Technology Challenge A22
-
-<br>
-
 面向流式数据加工场景的可视化任务管理平台。支持**拖拉拽编排 DAG 作业**，内置 12 种控件覆盖 CSV / Excel / MySQL / Kafka 的输入输出，以及 XML↔JSON 转换、字段拼接、Redis 扩充等数据治理能力。
 
 A visual stream processing task management platform. Build **ETL pipelines by drag-and-drop**, with 12 built-in components covering CSV / Excel / MySQL / Kafka I/O and data transformations including XML↔JSON conversion, field concatenation, and Redis enrichment.
@@ -187,19 +182,6 @@ class MyNewComponent(BaseComponent):
 
 然后在 `app/main.py` 加一行 `import`，重启即可。
 Then add one `import` line in `app/main.py` and restart.
-
-## 📊 参考资料 · References
-
-本项目架构参考了以下优秀开源项目 · Architecture inspired by:
-
-| 项目 · Project | 参考内容 · What we learned |
-|---------------|---------------------------|
-| [VibeETL](https://github.com/cardchase/VibeETL) | DAG engine + custom ReactFlow nodes |
-| [ReactFlow Pipeline UI](https://github.com/aksh10207/ReactFlow_Node-based-Pipeline-UI) | Kahn DAG validation algorithm |
-| [fastapi-best-practices](https://github.com/CN-P5/fastapi-best-practices-zh-cn) | Project structure best practices |
-| [Apache Hamilton](https://github.com/apache/hamilton) | Decorator-based component registry |
-| [Elyra Canvas](https://github.com/elyra-ai/canvas) (IBM) | React flow editor UX patterns |
-| [DolphinScheduler](https://github.com/apache/dolphinscheduler) | Task plugin abstraction |
 
 ## 📄 许可 · License
 
