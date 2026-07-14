@@ -37,6 +37,12 @@ export const componentApi = {
     http.put<any, ApiResponse<Component>>(`/components/${id}`, data),
   delete: (id: number) =>
     http.delete<any, ApiResponse<void>>(`/components/${id}`),
+  // 内置控件列表（含 config_schema）
+  listBuiltIn: () =>
+    http.get<any, ApiResponse<any[]>>('/components/built-in'),
+}
+  delete: (id: number) =>
+    http.delete<any, ApiResponse<void>>(`/components/${id}`),
 }
 
 // ──── 作业 ────

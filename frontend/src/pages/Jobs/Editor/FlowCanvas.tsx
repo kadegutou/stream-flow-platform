@@ -26,6 +26,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css'
 
 import CustomNode from '@/components/CustomNode'
+import { useEditorStore } from '@/stores/editorStore'
 
 // 注册自定义节点类型
 const nodeTypes = { customNode: CustomNode }
@@ -94,7 +95,9 @@ export default function FlowCanvas() {
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const selectedNodeId = useEditorStore(s => s.selectedNodeId)
+  const selectNode = useEditorStore(s => s.selectNode)
+  const removeNode = useEditorStore(s => s.removeNode)
 
   // ── 连线 ──
   const onConnect = useCallback(
@@ -140,27 +143,23 @@ export default function FlowCanvas() {
 
   // ── 节点选中 ──
   const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
-    setSelectedNodeId(node.id)
-  }, [])
+    selectNode(node.id)
+  }, [selectNode])
 
   const onPaneClick = useCallback(() => {
-    setSelectedNodeId(null)
-  }, [])
+    selectNode(null)
+  }, [selectNode])
 
   // ── 键盘快捷键 ──
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedNodeId) {
-          setNodes(nds => nds.filter(n => n.id !== selectedNodeId))
-          setEdges(eds => eds.filter(e => e.source !== selectedNodeId && e.target !== selectedNodeId))
-          setSelectedNodeId(null)
-        }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeId) {
+        removeNode(selectedNodeId)
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [selectedNodeId, setNodes, setEdges])
+  }, [selectedNodeId, removeNode])
 
   return (
     <div ref={reactFlowWrapper} style={{ height: '100%', background: '#f5f5f5' }}>
