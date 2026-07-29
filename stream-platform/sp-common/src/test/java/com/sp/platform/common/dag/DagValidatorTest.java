@@ -1,0 +1,110 @@
+package com.sp.platform.common.dag;
+
+import com.sp.platform.common.dag.Dag.Edge;
+import com.sp.platform.common.dag.Dag.Node;
+import com.sp.platform.common.spi.ComponentMeta;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class DagValidatorTest {
+
+    private static final ComponentMeta CSV_SOURCE = new ComponentMeta(
+            "csv-source", "CSV输入", "SOURCE", "", "",
+            "{\"type\":\"object\",\"required\":[\"path\"]}", "fake.CsvSource");
+    private static final ComponentMeta CONCAT = new ComponentMeta(
+            "field-concat", "字段拼接", "PROCESS", "", "",
+            "{\"type\":\"object\",\"required\":[\"sourceFields\",\"targetField\"]}", "fake.Concat");
+    private static final ComponentMeta CSV_SINK = new ComponentMeta(
+            "csv-sink", "CSV输出", "SINK", "", "",
+            "{\"type\":\"object\",\"required\":[\"path\"]}", "fake.CsvSink");
+
+    private final DagValidator validator = new DagValidator(List.of(CSV_SOURCE, CONCAT, CSV_SINK));
+
+    private static Dag chain() {
+        return new Dag(List.of(
+                new Node("n1", "csv-source", Map.of("path", "in.csv")),
+                new Node("n2", "field-concat",
+                        Map.of("sourceFields", List.of("A", "B"), "targetField", "C")),
+                new Node("n3", "csv-sink", Map.of("path", "out.csv"))),
+                List.of(new Edge("n1", "n2"), new Edge("n2", "n3")));
+    }
+
+    @Test
+    void validChainPasses() {
+        assertDoesNotThrow(() -> validator.validate(chain()));
+    }
+
+    @Test
+    void cycleRejected() {
+        Dag dag = new Dag(chain().nodes(),
+                List.of(new Edge("n1", "n2"), new Edge("n2", "n3"), new Edge("n3", "n2")));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> validator.validate(dag));
+        assertTrue(e.getMessage().contains("SINK") || e.getMessage().contains("环"));
+    }
+
+    @Test
+    void missingSourceRejected() {
+        Dag dag = new Dag(List.of(
+                new Node("n2", "field-concat",
+                        Map.of("sourceFields", List.of("A"), "targetField", "C")),
+                new Node("n3", "csv-sink", Map.of("path", "out.csv"))),
+                List.of(new Edge("n2", "n3")));
+        assertThrows(IllegalArgumentException.class, () -> validator.validate(dag));
+    }
+
+    @Test
+    void missingSinkRejected() {
+        Dag dag = new Dag(List.of(
+                new Node("n1", "csv-source", Map.of("path", "in.csv")),
+                new Node("n2", "field-concat",
+                        Map.of("sourceFields", List.of("A"), "targetField", "C"))),
+                List.of(new Edge("n1", "n2")));
+        assertThrows(IllegalArgumentException.class, () -> validator.validate(dag));
+    }
+
+    @Test
+    void sourceWithPredecessorRejected() {
+        Dag dag = new Dag(List.of(
+                new Node("n0", "csv-sink", Map.of("path", "x.csv")),
+                new Node("n1", "csv-source", Map.of("path", "in.csv")),
+                new Node("n3", "csv-sink", Map.of("path", "out.csv"))),
+                List.of(new Edge("n0", "n1"), new Edge("n1", "n3")));
+        // n0 是 SINK 有后继 或 n1 是 SOURCE 有前驱，均应拒绝
+        assertThrows(IllegalArgumentException.class, () -> validator.validate(dag));
+    }
+
+    @Test
+    void missingRequiredParamRejected() {
+        Dag dag = new Dag(List.of(
+                new Node("n1", "csv-source", Map.of()), // 缺 path
+                new Node("n3", "csv-sink", Map.of("path", "out.csv"))),
+                List.of(new Edge("n1", "n3")));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> validator.validate(dag));
+        assertTrue(e.getMessage().contains("path"));
+    }
+
+    @Test
+    void unknownComponentRejected() {
+        Dag dag = new Dag(List.of(
+                new Node("n1", "not-exist", Map.of()),
+                new Node("n3", "csv-sink", Map.of("path", "out.csv"))),
+                List.of(new Edge("n1", "n3")));
+        assertThrows(IllegalArgumentException.class, () -> validator.validate(dag));
+    }
+
+    @Test
+    void linearChainOrder() {
+        List<Node> chain2 = DagValidator.toLinearChain(chain());
+        assertTrue(chain2.get(0).id().equals("n1")
+                && chain2.get(1).id().equals("n2")
+                && chain2.get(2).id().equals("n3"));
+    }
+}

@@ -1,0 +1,31 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: sp-control-plane
+  datasource:
+    # dev（默认）：H2 内存库；prod 见 application-prod.yml（MySQL）
+    url: jdbc:h2:mem:streamdb;DB_CLOSE_DELAY=-1;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+
+sp:
+  jwt:
+    # Base64 编码的 HS256 密钥（开发默认值，生产务必覆盖）
+    secret: c3RyZWFtLXBsYXRmb3JtLWRldi1zZWNyZXQta2V5LTAxMjM0NTY3ODlhYmNkZWY=
+    ttl-minutes: 720
+  # Worker 内部接口共享密钥头 X-Worker-Token
+  worker-token: dev-token
+  scheduler:
+    interval-ms: 5000
+  worker-heartbeat-timeout-ms: 30000
+
+logging:
+  level:
+    org.hibernate.orm.deprecation: error

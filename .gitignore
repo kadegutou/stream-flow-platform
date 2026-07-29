@@ -1,0 +1,20 @@
+# Java / Maven
+**/target/
+
+# Node / 前端
+**/node_modules/
+**/dist/
+
+# 运行产物
+logs/
+*.log
+stream-platform/data/*.csv
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# 系统文件
+Thumbs.db
+.DS_Store
