@@ -1,0 +1,9 @@
+# 构建上下文裁剪（后端镜像构建上下文为工程根）
+**/target
+**/node_modules
+frontend/dist
+.git
+*.log
+logs
+data/*.csv
+.dockerignore

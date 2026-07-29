@@ -1,0 +1,129 @@
+# 通用流处理任务管理平台 —— 一键部署（Docker Compose v2）
+#
+# 使用：在 deploy/ 目录下执行
+#   docker compose up -d --build
+# 横向扩 Worker：
+#   docker compose up -d --scale worker=3
+#
+# 配置覆盖方式说明：
+#   - 数据源等 Spring 标准配置：用标准宽松绑定环境变量（SPRING_DATASOURCE_URL 等）
+#   - 平台自定义 sp.* 配置：用 SPRING_APPLICATION_JSON 注入（优先级最高），
+#     JSON key 与 application.yml 中的层级一一对应，例如
+#     {"sp":{"worker-token":"dev-token"}} ↔ sp.worker-token
+#   - 控制面与 Worker 的 sp.worker-token 必须一致（下方两处同步修改）
+
+name: stream-platform
+
+services:
+  # ---------------- 外部依赖 ----------------
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      # 库由入口自动创建；deploy/schema-mysql.sql 挂载到 initdb 目录建 7 张 sp_ 前缀表
+      MYSQL_DATABASE: stream_platform
+      MYSQL_USER: stream
+      MYSQL_PASSWORD: stream123
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./schema-mysql.sql:/docker-entrypoint-initdb.d/schema-mysql.sql:ro
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  # Kafka：官方 apache/kafka 镜像，KRaft 单 broker。
+  # 监听器分离：容器间访问用 PLAINTEXT(kafka:29092)，宿主机访问用 PLAINTEXT_HOST(localhost:9092)
+  kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:9093,PLAINTEXT_HOST://:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # KRaft 集群 ID（可用 kafka-storage.sh random-uuid 重新生成）
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    ports:
+      - "9092:9092"
+    restart: unless-stopped
+
+  # ---------------- 平台服务 ----------------
+  control-plane:
+    build:
+      context: .. # 工程根（Dockerfile 内 mvn -pl sp-control-plane -am 需要全部模块）
+      dockerfile: sp-control-plane/Dockerfile
+    environment:
+      # prod profile：MySQL 元数据库，ddl-auto=none（表由 mysql 容器 initdb 建好）
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/stream_platform?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=utf8"
+      SPRING_DATASOURCE_USERNAME: stream
+      SPRING_DATASOURCE_PASSWORD: stream123
+      # 自定义 sp.* 配置：sp.jwt.secret（Base64 HS256 密钥）、sp.worker-token（Worker 共享密钥）
+      # 生产环境务必替换这两个值；worker 服务中的 sp.worker-token 必须与此处一致
+      SPRING_APPLICATION_JSON: '{"sp":{"jwt":{"secret":"c3RyZWFtLXBsYXRmb3JtLWRldi1zZWNyZXQta2V5LTAxMjM0NTY3ODlhYmNkZWY="},"worker-token":"dev-token"}}'
+      JAVA_TOOL_OPTIONS: "-Xmx2g"
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy # 等 MySQL initdb 建表完成
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_started
+    volumes:
+      - data-exchange:/data # 文件类作业输入输出（可选挂载，便于宿主机/Worker 间交换文件）
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ..
+      dockerfile: sp-worker/Dockerfile
+    environment:
+      # sp.control-plane-url 指向控制面；sp.worker-token 与控制面一致
+      SPRING_APPLICATION_JSON: '{"sp":{"control-plane-url":"http://control-plane:8080","worker-token":"dev-token"}}'
+      JAVA_TOOL_OPTIONS: "-Xmx4g"
+      # 注意：故意不设置 WORKER_NODE_CODE 与 container_name，
+      # 保证 --scale worker=N 时各容器以各自 hostname 注册为不同节点
+    depends_on:
+      control-plane:
+        condition: service_started # Worker 注册自带重试，无需等待控制面就绪
+    volumes:
+      - data-exchange:/data # 共享数据卷：多 Worker 均可见，文件类作业路径用 /data/xxx
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend # vite build + nginx 托管，/api 反代到 control-plane:8080
+    ports:
+      - "80:80"
+    depends_on:
+      control-plane:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  kafka-data:
+  data-exchange:
