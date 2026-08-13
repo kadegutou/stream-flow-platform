@@ -86,7 +86,8 @@ public class HdfsSink implements Sink {
                 }
                 Object v = row.fields().get(columns.get(i));
                 if (v != null) {
-                    sb.append(v);
+                    sb.append(com.sp.platform.components.csv.CsvParser.escape(
+                            String.valueOf(v), delimiter));
                 }
             }
             sb.append('\n');

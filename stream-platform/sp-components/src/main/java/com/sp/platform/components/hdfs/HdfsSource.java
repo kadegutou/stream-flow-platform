@@ -38,6 +38,7 @@ import java.util.Map;
                     "delimiter":   {"type": "string",  "title": "分隔符", "default": ","},
                     "hasHeader":   {"type": "boolean", "title": "首行为表头", "default": true},
                     "batchSize":   {"type": "integer", "title": "批大小", "default": 5000},
+                    "quoteMode":   {"type": "string",  "title": "引号模式(auto/none)", "enum": ["auto", "none"], "default": "auto"},
                     "shardIndex":  {"type": "integer", "title": "分片序号(引擎注入)", "default": 0},
                     "totalShards": {"type": "integer", "title": "总分片数(引擎注入)", "default": 1}
                   }
@@ -48,6 +49,7 @@ public class HdfsSource implements Source {
     private FileSystem fs;
     private ShardedLineReader reader;
     private String delimiter;
+    private String quoteMode;
     private String[] header;
     private int batchSize;
     private boolean eof;
@@ -59,6 +61,7 @@ public class HdfsSource implements Source {
         this.delimiter = Params.str(params, "delimiter", ",");
         boolean hasHeader = Params.bool(params, "hasHeader", true);
         this.batchSize = Params.integer(params, "batchSize", 5000);
+        this.quoteMode = Params.str(params, "quoteMode", "auto");
         int shardIndex = Params.integer(params, "shardIndex", 0);
         int totalShards = Params.integer(params, "totalShards", 1);
 
@@ -120,7 +123,7 @@ public class HdfsSource implements Source {
     }
 
     private String[] split(String line) {
-        return line.split(java.util.regex.Pattern.quote(delimiter), -1);
+        return com.sp.platform.components.csv.CsvParser.parseLine(line, delimiter, quoteMode);
     }
 
     @Override

@@ -14,9 +14,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * DAG 校验器。对应设计文档 §4.3：
- * 图无环、恰好 1 个 SOURCE、>=1 个 SINK、SOURCE 无前驱、SINK 无后继、
- * 每个节点 params 必填项齐（按 schema required 简单校验）。
+ * DAG 校验器。对应设计文档 §4.3。
+ *
+ * <p>v1 执行引擎只支持线性链，校验与之对齐：DAG 必须恰好构成一条
+ * 1 个 SOURCE → 0..N 个 PROCESS → 1 个 SINK 的链：
+ * SOURCE 出度 1、SINK 入度 1、PROCESS 出入度各 1、无环、无悬空节点，
+ * 且每个节点 params 必填项齐（按 schema required 简单校验）。
  */
 public class DagValidator {
 
@@ -72,21 +75,42 @@ public class DagValidator {
         int sinks = 0;
         for (Node n : dag.nodes()) {
             String category = metaByCode.get(n.componentCode()).category();
+            int out = outgoing.get(n.id()).size();
+            int in = inDegree.get(n.id());
             switch (category) {
                 case "SOURCE" -> {
                     sources++;
-                    if (inDegree.get(n.id()) > 0) {
+                    if (in > 0) {
                         throw new IllegalArgumentException("SOURCE 节点不能有前驱: " + n.id());
+                    }
+                    if (out != 1) {
+                        throw new IllegalArgumentException(
+                                "SOURCE 节点必须恰好 1 条出边: " + n.id() + "，当前 " + out + " 条");
                     }
                 }
                 case "SINK" -> {
                     sinks++;
-                    if (!outgoing.get(n.id()).isEmpty()) {
+                    if (out > 0) {
                         throw new IllegalArgumentException("SINK 节点不能有后继: " + n.id());
+                    }
+                    if (in != 1) {
+                        throw new IllegalArgumentException(
+                                "SINK 节点必须恰好 1 条入边: " + n.id() + "，当前 " + in + " 条");
                     }
                 }
                 case "PROCESS" -> {
-                    // ok
+                    if (out > 1) {
+                        throw new IllegalArgumentException(
+                                "暂不支持分支：节点 " + n.id() + " 存在 " + out + " 条出边");
+                    }
+                    if (out == 0) {
+                        throw new IllegalArgumentException(
+                                "PROCESS 节点缺少出边（链路必须到达 SINK）: " + n.id());
+                    }
+                    if (in != 1) {
+                        throw new IllegalArgumentException(
+                                "PROCESS 节点必须恰好 1 条入边: " + n.id() + "，当前 " + in + " 条");
+                    }
                 }
                 default -> throw new IllegalArgumentException("未知控件类别: " + category);
             }
@@ -94,11 +118,30 @@ public class DagValidator {
         if (sources != 1) {
             throw new IllegalArgumentException("DAG 必须恰好包含 1 个 SOURCE，当前: " + sources);
         }
-        if (sinks < 1) {
-            throw new IllegalArgumentException("DAG 至少包含 1 个 SINK");
+        if (sinks != 1) {
+            throw new IllegalArgumentException("DAG 必须恰好包含 1 个 SINK，当前: " + sinks);
         }
 
         assertAcyclic(dag.nodes(), outgoing, inDegree);
+        assertSingleChain(dag.nodes(), outgoing);
+    }
+
+    /** 从唯一 SOURCE 沿出边走必须覆盖全部节点（排除悬空的 PROCESS 环等）。 */
+    private void assertSingleChain(List<Node> nodes, Map<String, List<String>> outgoing) {
+        String start = nodes.stream()
+                .filter(n -> "SOURCE".equals(metaByCode.get(n.componentCode()).category()))
+                .map(Node::id).findFirst().orElseThrow();
+        int visited = 0;
+        String cur = start;
+        while (cur != null) {
+            visited++;
+            List<String> next = outgoing.get(cur);
+            cur = next.isEmpty() ? null : next.get(0);
+        }
+        if (visited != nodes.size()) {
+            throw new IllegalArgumentException(
+                    "DAG 不是一条完整线性链：从 SOURCE 出发只覆盖 " + visited + "/" + nodes.size() + " 个节点");
+        }
     }
 
     /** Kahn 拓扑排序判环。 */

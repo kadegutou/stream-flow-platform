@@ -160,7 +160,11 @@ public class ExecutionEngine {
                             } catch (InterruptedException e) {
                                 Thread.currentThread().interrupt();
                             } catch (Exception e) {
-                                markFailed(e);
+                                // 优雅停止会 close source 唤醒阻塞中的 poll，
+                                // 由此引发的异常（如 Stream closed）不算失败
+                                if (!stopRequested) {
+                                    markFailed(e);
+                                }
                             } finally {
                                 q1.offer(POISON);
                             }
@@ -208,8 +212,8 @@ public class ExecutionEngine {
 
                 sinkThread.join();
                 procThread.join();
-                if (failed) {
-                    sourceThread.interrupt(); // 处理/Sink 失败时源线程可能阻塞在满队列上
+                if (failed || stopRequested) {
+                    sourceThread.interrupt(); // 失败/停止时源线程可能阻塞在满队列或 poll 上
                 }
                 sourceThread.join();
                 status = failed ? "FAILED" : "STOPPED";

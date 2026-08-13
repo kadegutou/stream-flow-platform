@@ -46,7 +46,9 @@ class DagValidatorTest {
                 List.of(new Edge("n1", "n2"), new Edge("n2", "n3"), new Edge("n3", "n2")));
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                 () -> validator.validate(dag));
-        assertTrue(e.getMessage().contains("SINK") || e.getMessage().contains("环"));
+        // 环上的 PROCESS 会因入边数=2 被拒，SINK 会因有后继被拒，均合法
+        assertTrue(e.getMessage().contains("SINK") || e.getMessage().contains("环")
+                || e.getMessage().contains("入边"), e.getMessage());
     }
 
     @Test
@@ -96,6 +98,58 @@ class DagValidatorTest {
         Dag dag = new Dag(List.of(
                 new Node("n1", "not-exist", Map.of()),
                 new Node("n3", "csv-sink", Map.of("path", "out.csv"))),
+                List.of(new Edge("n1", "n3")));
+        assertThrows(IllegalArgumentException.class, () -> validator.validate(dag));
+    }
+
+    @Test
+    void multiSinkRejected() {
+        Dag dag = new Dag(List.of(
+                new Node("n1", "csv-source", Map.of("path", "in.csv")),
+                new Node("n2", "csv-sink", Map.of("path", "a.csv")),
+                new Node("n3", "csv-sink", Map.of("path", "b.csv"))),
+                List.of(new Edge("n1", "n2"), new Edge("n1", "n3")));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> validator.validate(dag));
+        // SOURCE 出边 2 条 或 SINK 数量不为 1，均应拒绝
+        assertTrue(e.getMessage().contains("SOURCE") || e.getMessage().contains("SINK"));
+    }
+
+    @Test
+    void branchRejected() {
+        // n2 分出两条出边：明确报“暂不支持分支”
+        Dag dag = new Dag(List.of(
+                new Node("n1", "csv-source", Map.of("path", "in.csv")),
+                new Node("n2", "field-concat",
+                        Map.of("sourceFields", List.of("A"), "targetField", "C")),
+                new Node("n3", "field-concat",
+                        Map.of("sourceFields", List.of("A"), "targetField", "D")),
+                new Node("n4", "csv-sink", Map.of("path", "out.csv"))),
+                List.of(new Edge("n1", "n2"), new Edge("n2", "n3"), new Edge("n2", "n4"),
+                        new Edge("n3", "n4")));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> validator.validate(dag));
+        assertTrue(e.getMessage().contains("暂不支持分支"), e.getMessage());
+        assertTrue(e.getMessage().contains("n2"), e.getMessage());
+    }
+
+    @Test
+    void sourceWithoutOutEdgeRejected() {
+        Dag dag = new Dag(List.of(
+                new Node("n1", "csv-source", Map.of("path", "in.csv")),
+                new Node("n3", "csv-sink", Map.of("path", "out.csv"))),
+                List.of()); // 无边
+        assertThrows(IllegalArgumentException.class, () -> validator.validate(dag));
+    }
+
+    @Test
+    void disconnectedProcessRejected() {
+        // 主链完整，但有一个悬空的 PROCESS（入边出边都非法）
+        Dag dag = new Dag(List.of(
+                new Node("n1", "csv-source", Map.of("path", "in.csv")),
+                new Node("n3", "csv-sink", Map.of("path", "out.csv")),
+                new Node("n9", "field-concat",
+                        Map.of("sourceFields", List.of("A"), "targetField", "C"))),
                 List.of(new Edge("n1", "n3")));
         assertThrows(IllegalArgumentException.class, () -> validator.validate(dag));
     }

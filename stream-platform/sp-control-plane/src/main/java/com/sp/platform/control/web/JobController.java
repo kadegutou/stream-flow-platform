@@ -137,14 +137,18 @@ public class JobController {
     }
 
     @GetMapping("/{id}")
-    public Map<String, Object> detail(@PathVariable Long id) {
-        return toDetailView(findJob(id));
+    public Map<String, Object> detail(@PathVariable Long id, HttpServletRequest req) {
+        JobEntity j = findJob(id);
+        checkOwner(j, req);
+        return toDetailView(j);
     }
 
     /** PUT /api/jobs/{id}：每次保存版本号 +1。 */
     @PutMapping("/{id}")
-    public Map<String, Object> update(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+    public Map<String, Object> update(@PathVariable Long id, @RequestBody Map<String, Object> body,
+                                      HttpServletRequest req) {
         JobEntity j = findJob(id);
+        checkOwner(j, req);
         if (!instanceRepo.findByJobIdAndStatusIn(id, ACTIVE).isEmpty()) {
             throw ApiException.conflict("作业存在运行中的实例，请先下线再修改");
         }
@@ -166,8 +170,9 @@ public class JobController {
 
     @DeleteMapping("/{id}")
     @Transactional
-    public Map<String, Object> delete(@PathVariable Long id) {
+    public Map<String, Object> delete(@PathVariable Long id, HttpServletRequest req) {
         JobEntity j = findJob(id);
+        checkOwner(j, req);
         if (!instanceRepo.findByJobIdAndStatusIn(id, ACTIVE).isEmpty()) {
             throw ApiException.conflict("作业存在运行中的实例，请先下线再删除");
         }
@@ -190,8 +195,9 @@ public class JobController {
      */
     @PostMapping("/{id}/online")
     @Transactional
-    public Map<String, Object> online(@PathVariable Long id) {
+    public Map<String, Object> online(@PathVariable Long id, HttpServletRequest req) {
         JobEntity j = findJob(id);
+        checkOwner(j, req);
         if (!instanceRepo.findByJobIdAndStatusIn(id, ACTIVE).isEmpty()) {
             throw ApiException.conflict("作业已有运行中/待运行的实例，不能重复上线");
         }
@@ -216,8 +222,8 @@ public class JobController {
     /** POST /api/jobs/{id}/offline：最新运行中实例置 STOPPING（分片同步置 STOPPING）。 */
     @PostMapping("/{id}/offline")
     @Transactional
-    public Map<String, Object> offline(@PathVariable Long id) {
-        findJob(id);
+    public Map<String, Object> offline(@PathVariable Long id, HttpServletRequest req) {
+        checkOwner(findJob(id), req);
         List<JobInstanceEntity> active = instanceRepo.findByJobIdAndStatusIn(id,
                 List.of(JobInstanceEntity.PENDING, JobInstanceEntity.RUNNING));
         if (active.isEmpty()) {
@@ -238,8 +244,8 @@ public class JobController {
 
     /** GET /api/jobs/{id}/instances → 实例列表（新的在前）。 */
     @GetMapping("/{id}/instances")
-    public List<Map<String, Object>> instances(@PathVariable Long id) {
-        findJob(id);
+    public List<Map<String, Object>> instances(@PathVariable Long id, HttpServletRequest req) {
+        checkOwner(findJob(id), req);
         return instanceRepo.findByJobIdOrderByIdDesc(id).stream()
                 .map(JobController::instanceView).toList();
     }
@@ -247,6 +253,13 @@ public class JobController {
     private JobEntity findJob(Long id) {
         return jobRepo.findById(id)
                 .orElseThrow(() -> ApiException.notFound("作业不存在: " + id));
+    }
+
+    /** 归属校验：作业不属于当前用户且当前用户不是 ADMIN 时拒绝（403）。 */
+    private static void checkOwner(JobEntity job, HttpServletRequest req) {
+        if (!isAdmin(req) && !job.getOwnerId().equals(uid(req))) {
+            throw ApiException.forbidden("无权操作他人作业");
+        }
     }
 
     private static String required(Map<String, Object> body, String key) {

@@ -23,6 +23,9 @@ import java.util.Map;
  * <p>支持文件分片（§7 横向扩展）：totalShards &gt; 1 时按字节区间切片、
  * 按行边界对齐，各分片读取互不重叠的区段。shardIndex/totalShards 默认 0/1，
  * 由执行引擎按分片信息自动注入，无需手工填写。
+ *
+ * <p>解析（quoteMode=auto）：行内无引号走手动扫描快速路径（无正则，性能优先，§8）；
+ * 检测到引号走 RFC 4180 完整解析。已知限制：不支持字段内嵌换行（与分片行对齐机制冲突）。
  */
 @ComponentDef(
         code = "csv-source",
@@ -39,6 +42,7 @@ import java.util.Map;
                     "delimiter":   {"type": "string",  "title": "分隔符", "default": ","},
                     "hasHeader":   {"type": "boolean", "title": "首行为表头", "default": true},
                     "batchSize":   {"type": "integer", "title": "批大小", "default": 5000},
+                    "quoteMode":   {"type": "string",  "title": "引号模式(auto走RFC4180/none纯快速切分，不支持字段内换行)", "enum": ["auto", "none"], "default": "auto"},
                     "shardIndex":  {"type": "integer", "title": "分片序号(引擎注入)", "default": 0},
                     "totalShards": {"type": "integer", "title": "总分片数(引擎注入)", "default": 1}
                   }
@@ -48,6 +52,7 @@ public class CsvSource implements Source {
 
     private ShardedLineReader reader;
     private String delimiter;
+    private String quoteMode;
     private String[] header;
     private int batchSize;
     private boolean eof;
@@ -58,6 +63,7 @@ public class CsvSource implements Source {
         this.delimiter = Params.str(params, "delimiter", ",");
         boolean hasHeader = Params.bool(params, "hasHeader", true);
         this.batchSize = Params.integer(params, "batchSize", 5000);
+        this.quoteMode = Params.str(params, "quoteMode", "auto");
         int shardIndex = Params.integer(params, "shardIndex", 0);
         int totalShards = Params.integer(params, "totalShards", 1);
 
@@ -120,9 +126,9 @@ public class CsvSource implements Source {
         return new Row(fields);
     }
 
-    /** 轻量解析：按分隔符切分（不支持引号转义，性能优先，见设计 §8 零拷贝解析）。 */
+    /** 解析：无引号走快速路径（无正则），有引号走 RFC 4180（见 {@link CsvParser}）。 */
     private String[] split(String line) {
-        return line.split(java.util.regex.Pattern.quote(delimiter), -1);
+        return CsvParser.parseLine(line, delimiter, quoteMode);
     }
 
     @Override
