@@ -96,13 +96,15 @@ public class ExecutionEngine {
     static final class ShardRunner {
 
         /**
-         * 管道中传递的批次：rows + 完成计数（扇出时 = Sink 数）+ 写完回执。
+         * 管道中传递的批次：rows + 完成计数（扇出时 = Sink 数）+ 写完回执 + 单调序号。
          * 全部 Sink 写完该批才累计行数并回调 ack（at-least-once）。
+         * seq 从 1 起按 poll() 产生顺序递增，随批次原样传递到各 Sink，
+         * 供 AckAware 按序对齐（扇出时完成顺序可能与产生顺序不一致）。
          */
-        private record Batch(List<Row> rows, AtomicInteger pendingSinks, AckAware ack) {
+        private record Batch(List<Row> rows, AtomicInteger pendingSinks, AckAware ack, long seq) {
         }
 
-        private static final Batch POISON = new Batch(null, null, null); // 毒丸（身份比较）
+        private static final Batch POISON = new Batch(null, null, null, 0L); // 毒丸（身份比较）
 
         private final ShardAssignment assignment;
         private final AtomicLong totalRows = new AtomicLong();
@@ -175,6 +177,7 @@ public class ExecutionEngine {
                 }
 
                 // Source 线程：poll → q1；EOF 或停止 → 毒丸
+                AtomicLong batchSeq = new AtomicLong(1); // 批次序号（仅 source 线程使用）
                 sourceThread = Thread.ofVirtual().name("shard-" + assignment.shardId() + "-source")
                         .start(() -> {
                             try {
@@ -183,7 +186,8 @@ public class ExecutionEngine {
                                     if (rows.isEmpty()) {
                                         break; // EOF
                                     }
-                                    Batch batch = new Batch(rows, new AtomicInteger(sinks.size()), ack);
+                                    Batch batch = new Batch(rows, new AtomicInteger(sinks.size()),
+                                            ack, batchSeq.getAndIncrement());
                                     offerWhileRunning(q1, batch);
                                 }
                             } catch (InterruptedException e) {
@@ -214,7 +218,7 @@ public class ExecutionEngine {
                                     for (Processor p : processors) {
                                         rows = p.process(rows);
                                     }
-                                    Batch out = new Batch(rows, batch.pendingSinks(), batch.ack());
+                                    Batch out = new Batch(rows, batch.pendingSinks(), batch.ack(), batch.seq());
                                     for (ArrayBlockingQueue<Batch> q : sinkQueues) {
                                         offerWhileRunning(q, out); // 逐个 put：最慢 Sink 形成背压
                                     }
@@ -249,7 +253,7 @@ public class ExecutionEngine {
                                         if (batch.pendingSinks().decrementAndGet() == 0) {
                                             totalRows.addAndGet(batch.rows().size());
                                             if (batch.ack() != null) {
-                                                batch.ack().onBatchWritten();
+                                                batch.ack().onBatchWritten(batch.seq());
                                             }
                                         }
                                     }

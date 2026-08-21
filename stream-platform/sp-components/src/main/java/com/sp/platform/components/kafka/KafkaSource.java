@@ -23,17 +23,21 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 /**
  * Kafka 输入控件：批量 poll，消息体为 JSON 对象字符串（字段名→值）。
  * 说明：Kafka 是无界流，poll() 在无数据时阻塞等待（1s/次轮询），
  * 仅当 close()（优雅停止）触发 wakeup 后才返回空（EOF）。
  *
- * <p>at-least-once：关闭自动提交；每批的结束位移先入队，引擎在该批被所有 Sink
- * 写完后回调 {@link #onBatchWritten()}，位移到下一次 poll() 时才 commitSync
- * （KafkaConsumer 非线程安全，提交只能在 poll 线程做）。崩溃时未提交的批次会
- * 被重新消费——下游可能重复，Sink 侧不去重。
+ * <p>at-least-once：关闭自动提交；每批的结束位移按序号登记，引擎在该批被所有
+ * Sink 写完后回调 {@link #onBatchWritten(long)}（带批次序号），位移到下一次
+ * poll() 时才 commitSync（KafkaConsumer 非线程安全，提交只能在 poll 线程做）。
+ * 扇出多 Sink 时各批完成顺序可能乱序，因此只提交「连续完成前缀」——靠前批次未
+ * 完成前不提交靠后批次，避免失败场景下丢数据。崩溃时未提交的批次会被重新消费，
+ * 下游可能重复，Sink 侧不去重。
  */
 @ComponentDef(
         code = "kafka-source",
@@ -60,12 +64,15 @@ public class KafkaSource implements Source, AckAware {
     private KafkaConsumer<String, String> consumer;
     private int batchSize;
     private volatile boolean closed;
-    /** 已 poll 但未确认写完的批次结束位移（FIFO，与批次的产生/完成顺序一致）。 */
-    private final ConcurrentLinkedQueue<Map<TopicPartition, OffsetAndMetadata>> pendingOffsets =
-            new ConcurrentLinkedQueue<>();
-    /** 已确认写完、待提交的位移（poll 线程消费）。 */
-    private final ConcurrentLinkedQueue<Map<TopicPartition, OffsetAndMetadata>> acknowledged =
-            new ConcurrentLinkedQueue<>();
+    /** 已 poll 但未确认写完的批次结束位移：批次序号 → 位移（序号从 1 起递增）。 */
+    private final Map<Long, Map<TopicPartition, OffsetAndMetadata>> pendingOffsetsBySeq =
+            new ConcurrentHashMap<>();
+    /** 已确认写完的批次序号（Sink 线程写，poll 线程按序消费）。 */
+    private final Set<Long> completedSeqs = new ConcurrentSkipListSet<>();
+    /** 下一批次的序号（仅 poll 线程访问）。 */
+    private long pollSeq = 1;
+    /** 下一个待提交的批次序号（仅 poll 线程访问）；只提交连续完成前缀。 */
+    private long expectedSeq = 1;
 
     @Override
     public void open(Map<String, Object> params, Context ctx) {
@@ -114,31 +121,53 @@ public class KafkaSource implements Source, AckAware {
                     throw new IllegalStateException("Kafka 消息不是合法 JSON: " + record.value(), e);
                 }
             });
-            pendingOffsets.add(endOffsets);
+            pendingOffsetsBySeq.put(pollSeq++, endOffsets);
             return batch;
         }
         return List.of();
     }
 
-    /** 引擎回调：一批已被所有 Sink 写完。线程安全（Sink 线程调用）。 */
+    /** 引擎回调：一批已被所有 Sink 写完（带批次序号）。线程安全（Sink 线程调用）。 */
     @Override
-    public void onBatchWritten() {
-        Map<TopicPartition, OffsetAndMetadata> offsets = pendingOffsets.poll();
-        if (offsets != null) {
-            acknowledged.add(offsets);
+    public void onBatchWritten(long batchSeq) {
+        completedSeqs.add(batchSeq);
+    }
+
+    /**
+     * 在 poll 线程提交已确认位移（KafkaConsumer 非线程安全）。
+     * 只提交「连续完成前缀」：自 expectedSeq 起，直到遇到第一个未完成批次为止。
+     * 扇出场景下各 Sink 消费速度不同，靠后批次可能先完成——若直接提交会越过
+     * 未完成的前批，崩溃重跑时跳过该批数据（丢数据）。按序提交前缀保证 at-least-once。
+     */
+    private void commitAcknowledged() {
+        CommittablePrefix r = committablePrefix(pendingOffsetsBySeq, completedSeqs, expectedSeq);
+        expectedSeq = r.nextExpectedSeq();
+        if (!r.offsets().isEmpty()) {
+            consumer.commitSync(r.offsets());
         }
     }
 
-    /** 在 poll 线程提交已确认位移（KafkaConsumer 非线程安全）。 */
-    private void commitAcknowledged() {
+    /** 连续完成前缀的提交结果：推进后的下一个待提交序号 + 合并的位移。 */
+    record CommittablePrefix(long nextExpectedSeq, Map<TopicPartition, OffsetAndMetadata> offsets) {
+    }
+
+    /**
+     * 从已确认完成的批次集合中，计算自 expectedSeq 起**连续**完成的批次位移并合并。
+     * 遇第一个未完成批次即停；已消费的确认项从集合移除，未触及的保留。
+     * 纯函数（不触碰 KafkaConsumer），便于单测乱序完成场景。
+     */
+    static CommittablePrefix committablePrefix(
+            Map<Long, Map<TopicPartition, OffsetAndMetadata>> pending,
+            Set<Long> completed, long expectedSeq) {
         Map<TopicPartition, OffsetAndMetadata> merged = new HashMap<>();
-        for (Map<TopicPartition, OffsetAndMetadata> m = acknowledged.poll(); m != null;
-             m = acknowledged.poll()) {
-            merged.putAll(m); // 批次有序产生，后面的位移覆盖前面的
+        while (completed.remove(expectedSeq)) {
+            Map<TopicPartition, OffsetAndMetadata> offsets = pending.remove(expectedSeq);
+            if (offsets != null) {
+                merged.putAll(offsets); // 批次有序产生，靠后的位移覆盖靠前的
+            }
+            expectedSeq++;
         }
-        if (!merged.isEmpty()) {
-            consumer.commitSync(merged);
-        }
+        return new CommittablePrefix(expectedSeq, merged);
     }
 
     @Override

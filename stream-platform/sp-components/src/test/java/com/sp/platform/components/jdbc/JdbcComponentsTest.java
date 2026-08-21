@@ -16,7 +16,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /** JDBC 抽象基类 round-trip：H2 内存库，Sink 批量写入 → Source 流式读回。 */
 class JdbcComponentsTest {
 
-    private static final String URL = "jdbc:h2:mem:jdbctest;DB_CLOSE_DELAY=-1";
+    // DATABASE_TO_UPPER=false：让未加引号的标识符保持原样，与 PG/Oracle 的小写表名语义一致，
+    // 否则 H2 默认大写化建表名，而 AbstractJdbc* 用双引号引用精确小写名会找不到表
+    private static final String URL = "jdbc:h2:mem:jdbctest;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false";
 
     /** 用 H2 验证基类逻辑：fetchSize 正数、双引号标识符。 */
     static class H2Source extends AbstractJdbcSource {

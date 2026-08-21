@@ -40,7 +40,7 @@ public abstract class AbstractJdbcSource implements Source {
     public void open(Map<String, Object> params, Context ctx) throws Exception {
         String url = Params.required(params, "url");
         String username = Params.required(params, "username");
-        String password = Params.required(params, "password");
+        String password = Params.str(params, "password", ""); // 密码可选（无密码库）
         String sql = Params.required(params, "sql");
         this.batchSize = Params.integer(params, "batchSize", 5000);
 

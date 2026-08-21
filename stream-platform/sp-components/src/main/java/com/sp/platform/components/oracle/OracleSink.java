@@ -13,7 +13,7 @@ import com.sp.platform.components.jdbc.AbstractJdbcSink;
         paramSchema = """
                 {
                   "type": "object",
-                  "required": ["url", "username", "password", "table", "fields"],
+                  "required": ["url", "username", "table", "fields"],
                   "properties": {
                     "url":      {"type": "string", "title": "JDBC URL", "default": "jdbc:oracle:thin:@//localhost:1521/ORCL"},
                     "username": {"type": "string", "title": "用户名"},

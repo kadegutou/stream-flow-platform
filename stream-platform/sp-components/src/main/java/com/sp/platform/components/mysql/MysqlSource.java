@@ -13,7 +13,7 @@ import com.sp.platform.components.jdbc.AbstractJdbcSource;
         paramSchema = """
                 {
                   "type": "object",
-                  "required": ["url", "username", "password", "sql"],
+                  "required": ["url", "username", "sql"],
                   "properties": {
                     "url":       {"type": "string",  "title": "JDBC URL"},
                     "username":  {"type": "string",  "title": "用户名"},

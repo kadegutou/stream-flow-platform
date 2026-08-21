@@ -29,7 +29,7 @@ public abstract class AbstractJdbcSink implements Sink {
     public void open(Map<String, Object> params, Context ctx) throws Exception {
         String url = Params.required(params, "url");
         String username = Params.required(params, "username");
-        String password = Params.required(params, "password");
+        String password = Params.str(params, "password", ""); // 密码可选（无密码库）
         String table = Params.required(params, "table");
         this.fields = Params.strList(params, "fields");
 
