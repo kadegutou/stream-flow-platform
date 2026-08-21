@@ -46,12 +46,12 @@ public class InstanceController {
         this.jobRepo = jobRepo;
     }
 
-    /** GET /api/instances/{id}/metrics → [{rowsPerSec,totalRows,sampledAt}] */
+    /** GET /api/instances/{id}/metrics → [{rowsPerSec,totalRows,sampledAt}]（校验归属，防越权读他人实例） */
     @GetMapping("/{id}/metrics")
-    public List<Map<String, Object>> metrics(@PathVariable Long id) {
-        if (!instanceRepo.existsById(id)) {
-            throw ApiException.notFound("实例不存在: " + id);
-        }
+    public List<Map<String, Object>> metrics(@PathVariable Long id, HttpServletRequest req) {
+        JobInstanceEntity inst = instanceRepo.findById(id)
+                .orElseThrow(() -> ApiException.notFound("实例不存在: " + id));
+        checkInstanceOwner(inst, req);
         return metricRepo.findByInstanceIdOrderBySampledAtAsc(id).stream().map(m -> {
             Map<String, Object> v = new LinkedHashMap<String, Object>();
             v.put("rowsPerSec", m.getRowsPerSec());
@@ -71,14 +71,7 @@ public class InstanceController {
     public Map<String, Object> retry(@PathVariable Long id, HttpServletRequest req) {
         JobInstanceEntity inst = instanceRepo.findById(id)
                 .orElseThrow(() -> ApiException.notFound("实例不存在: " + id));
-        // 归属校验：与作业操作一致（owner 或 ADMIN）
-        JobEntity job = jobRepo.findById(inst.getJobId())
-                .orElseThrow(() -> ApiException.notFound("作业不存在: " + inst.getJobId()));
-        Long uid = (Long) req.getAttribute(JwtAuthFilter.ATTR_UID);
-        boolean admin = "ADMIN".equals(req.getAttribute(JwtAuthFilter.ATTR_ROLE));
-        if (!admin && !job.getOwnerId().equals(uid)) {
-            throw ApiException.forbidden("无权操作他人作业");
-        }
+        checkInstanceOwner(inst, req);
         if (!JobInstanceEntity.FAILED.equals(inst.getStatus())
                 && !JobInstanceEntity.STOPPED.equals(inst.getStatus())) {
             throw ApiException.conflict("仅 FAILED/STOPPED 实例可重跑，当前: " + inst.getStatus());
@@ -108,6 +101,17 @@ public class InstanceController {
         resp.put("ok", true);
         resp.put("resetShards", reset);
         return resp;
+    }
+
+    /** 归属校验：实例所属作业的 owner 或 ADMIN 可访问，否则 403（防 IDOR）。 */
+    private void checkInstanceOwner(JobInstanceEntity inst, HttpServletRequest req) {
+        JobEntity job = jobRepo.findById(inst.getJobId())
+                .orElseThrow(() -> ApiException.notFound("作业不存在: " + inst.getJobId()));
+        Long uid = (Long) req.getAttribute(JwtAuthFilter.ATTR_UID);
+        boolean admin = "ADMIN".equals(req.getAttribute(JwtAuthFilter.ATTR_ROLE));
+        if (!admin && !job.getOwnerId().equals(uid)) {
+            throw ApiException.forbidden("无权操作他人作业");
+        }
     }
 
     /** DAG 快照中是否含覆盖写类 Sink（csv/excel/hdfs 输出）。解析失败视为 true（保守全量重跑）。 */

@@ -60,7 +60,8 @@ public class HdfsSink implements Sink {
 
         Configuration conf = new Configuration();
         conf.set("fs.defaultFS", hdfsUri);
-        fs = FileSystem.get(URI.create(hdfsUri), conf);
+        // newInstance 而非 get()：get() 返回 JVM 级缓存共享实例，多分片各自 close 会互相影响
+        fs = FileSystem.newInstance(URI.create(hdfsUri), conf);
         FSDataOutputStream out = fs.create(new Path(path), true);
         this.writer = new BufferedWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8),
                 8 * 1024 * 1024);

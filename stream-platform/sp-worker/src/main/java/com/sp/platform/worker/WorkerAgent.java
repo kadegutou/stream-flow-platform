@@ -8,6 +8,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -25,7 +26,7 @@ public class WorkerAgent implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(WorkerAgent.class);
 
-    private final RestTemplate http = new RestTemplate();
+    private final RestTemplate http = buildRestTemplate();
     private final ExecutionEngine engine;
 
     private final String baseUrl;
@@ -47,6 +48,14 @@ public class WorkerAgent implements ApplicationRunner {
         this.token = token;
         this.nodeCode = nodeCode;
         this.serverPort = serverPort;
+    }
+
+    /** 设置 connect/read 超时，避免控制面异常时心跳/上报线程被永久挂住。 */
+    private static RestTemplate buildRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(2000);
+        factory.setReadTimeout(5000);
+        return new RestTemplate(factory);
     }
 
     @Override

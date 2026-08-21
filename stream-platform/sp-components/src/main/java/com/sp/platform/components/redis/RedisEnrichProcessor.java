@@ -11,6 +11,8 @@ import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisFuture;
 import io.lettuce.core.RedisURI;
 import io.lettuce.core.api.StatefulRedisConnection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -57,6 +59,8 @@ import java.util.concurrent.TimeUnit;
                 }
                 """)
 public class RedisEnrichProcessor implements Processor {
+
+    private static final Logger log = LoggerFactory.getLogger(RedisEnrichProcessor.class);
 
     /** 缓存中的「未命中」标记。 */
     private static final Object MISS = new Object();
@@ -154,6 +158,8 @@ public class RedisEnrichProcessor implements Processor {
             }
             return v instanceof Map ? (Map<String, String>) v : v;
         } catch (Exception e) {
+            // 查询异常与未命中同处理为 null（字段缺失），但至少留 WARN 便于区分故障与真未命中
+            log.warn("Redis 补数查询失败，该字段按未命中处理（缺失）: {}", e.getMessage());
             return null;
         }
     }

@@ -65,7 +65,8 @@ public class HdfsSource implements Source {
 
         Configuration conf = new Configuration();
         conf.set("fs.defaultFS", hdfsUri);
-        fs = FileSystem.get(URI.create(hdfsUri), conf);
+        // newInstance 而非 get()：get() 返回 JVM 级缓存共享实例，多分片各自 close 会互相影响
+        fs = FileSystem.newInstance(URI.create(hdfsUri), conf);
         Path file = new Path(path);
         long size = fs.getFileStatus(file).getLen();
 

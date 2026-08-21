@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,13 +27,21 @@ import java.util.Map;
 public class WorkerAdminController {
 
     private final WorkerNodeRepo workerRepo;
-    private final RestTemplate http = new RestTemplate();
+    private final RestTemplate http = buildRestTemplate();
     private final String workerToken;
 
     public WorkerAdminController(WorkerNodeRepo workerRepo,
                                  @Value("${sp.worker-token:dev-token}") String workerToken) {
         this.workerRepo = workerRepo;
         this.workerToken = workerToken;
+    }
+
+    /** 设置 connect/read 超时，避免 Worker 挂死时日志代理永久占用线程。 */
+    private static RestTemplate buildRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(2000);
+        factory.setReadTimeout(5000);
+        return new RestTemplate(factory);
     }
 
     /** GET /api/workers → [{id,nodeCode,address,status,lastHeartbeat}]（登录即可） */
