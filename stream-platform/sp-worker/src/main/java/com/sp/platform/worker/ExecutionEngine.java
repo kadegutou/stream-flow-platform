@@ -314,13 +314,13 @@ public class ExecutionEngine {
         private StreamComponent instantiate(ComponentRegistry registry, Dag.Node node, Context ctx)
                 throws Exception {
             StreamComponent component = registry.create(node.componentCode());
-            // 注入分片与断点续传参数：控件未显式指定时按分片任务信息注入
+            // 注入分片与断点续传参数：引擎值为权威，强制覆盖（防止用户表单篡改同名参数破坏分片）
             Map<String, Object> params = new java.util.HashMap<>(
                     node.params() == null ? Map.of() : node.params());
-            params.putIfAbsent("shardIndex", assignment.shardIndex());
-            params.putIfAbsent("totalShards", assignment.totalShards());
+            params.put("shardIndex", assignment.shardIndex());
+            params.put("totalShards", assignment.totalShards());
             if (assignment.resumeOffset() > 0) {
-                params.putIfAbsent("resumeOffset", assignment.resumeOffset());
+                params.put("resumeOffset", assignment.resumeOffset());
             }
             if (component instanceof Source s) {
                 s.open(params, ctx);

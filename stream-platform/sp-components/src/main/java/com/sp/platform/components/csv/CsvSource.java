@@ -42,10 +42,7 @@ import java.util.Map;
                     "delimiter":   {"type": "string",  "title": "分隔符", "default": ","},
                     "hasHeader":   {"type": "boolean", "title": "首行为表头", "default": true},
                     "batchSize":   {"type": "integer", "title": "批大小", "default": 5000},
-                    "quoteMode":   {"type": "string",  "title": "引号模式(auto走RFC4180/none纯快速切分，不支持字段内换行)", "enum": ["auto", "none"], "default": "auto"},
-                    "resumeOffset": {"type": "integer", "title": "断点续读偏移(引擎注入)", "default": 0},
-                    "shardIndex":  {"type": "integer", "title": "分片序号(引擎注入)", "default": 0},
-                    "totalShards": {"type": "integer", "title": "总分片数(引擎注入)", "default": 1}
+                    "quoteMode":   {"type": "string",  "title": "引号模式(auto走RFC4180/none纯快速切分，不支持字段内换行)", "enum": ["auto", "none"], "default": "auto"}
                   }
                 }
                 """)

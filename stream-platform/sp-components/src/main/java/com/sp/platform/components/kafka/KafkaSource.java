@@ -96,33 +96,36 @@ public class KafkaSource implements Source, AckAware {
 
     @Override
     public List<Row> poll() throws Exception {
-        commitAcknowledged(); // 上一批被 Sink 写完后才提交位移（at-least-once）
-        while (!closed) {
-            ConsumerRecords<String, String> records;
-            try {
-                records = consumer.poll(Duration.ofSeconds(1));
-            } catch (WakeupException e) {
-                return List.of(); // 优雅停止 → EOF
-            }
-            if (records.isEmpty()) {
-                continue; // 无界流：无数据继续等，不当 EOF
-            }
-            List<Row> batch = new ArrayList<>(records.count());
-            Map<TopicPartition, OffsetAndMetadata> endOffsets = new HashMap<>();
-            records.forEach(record -> {
-                endOffsets.put(new TopicPartition(record.topic(), record.partition()),
-                        new OffsetAndMetadata(record.offset() + 1));
-                try {
-                    Map<String, Object> fields = mapper.readValue(
-                            record.value(), new TypeReference<LinkedHashMap<String, Object>>() {
-                            });
-                    batch.add(new Row(fields));
-                } catch (Exception e) {
-                    throw new IllegalStateException("Kafka 消息不是合法 JSON: " + record.value(), e);
+        try {
+            while (!closed) {
+                commitAcknowledged(); // 上一批被 Sink 写完后才提交位移（at-least-once）
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
+                if (records.isEmpty()) {
+                    continue; // 无界流：无数据继续等，不当 EOF
                 }
-            });
-            pendingOffsetsBySeq.put(pollSeq++, endOffsets);
-            return batch;
+                List<Row> batch = new ArrayList<>(records.count());
+                Map<TopicPartition, OffsetAndMetadata> endOffsets = new HashMap<>();
+                records.forEach(record -> {
+                    endOffsets.put(new TopicPartition(record.topic(), record.partition()),
+                            new OffsetAndMetadata(record.offset() + 1));
+                    try {
+                        Map<String, Object> fields = mapper.readValue(
+                                record.value(), new TypeReference<LinkedHashMap<String, Object>>() {
+                                });
+                        batch.add(new Row(fields));
+                    } catch (Exception e) {
+                        throw new IllegalStateException("Kafka 消息不是合法 JSON: " + record.value(), e);
+                    }
+                });
+                pendingOffsetsBySeq.put(pollSeq++, endOffsets);
+                return batch;
+            }
+        } catch (WakeupException e) {
+            // 优雅停止：close() 的 wakeup 打断 poll/commitSync，正常返回 EOF
+        } finally {
+            if (closed) {
+                closeConsumer(); // KafkaConsumer 只能在 poll 线程关闭，这里即 source 线程
+            }
         }
         return List.of();
     }
@@ -173,8 +176,23 @@ public class KafkaSource implements Source, AckAware {
     @Override
     public void close() {
         closed = true;
-        if (consumer != null) {
-            consumer.wakeup();
+        KafkaConsumer<String, String> c = consumer;
+        if (c != null) {
+            c.wakeup(); // 唤醒 poll 线程；consumer 由 poll 线程在 closeConsumer() 中真正关闭
+        }
+    }
+
+    /** 幂等关闭 consumer（仅由 poll 线程调用：KafkaConsumer 非线程安全）。 */
+    private void closeConsumer() {
+        KafkaConsumer<String, String> c = consumer;
+        if (c == null) {
+            return;
+        }
+        consumer = null;
+        try {
+            c.close(Duration.ofSeconds(3));
+        } catch (Exception ignored) {
+            // 关闭失败不影响主流程
         }
     }
 }

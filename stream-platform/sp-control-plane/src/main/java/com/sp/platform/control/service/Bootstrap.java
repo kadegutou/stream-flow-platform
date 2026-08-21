@@ -8,6 +8,7 @@ import com.sp.platform.control.repo.ComponentDefRepo;
 import com.sp.platform.control.repo.SysUserRepo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.env.Environment;
@@ -17,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-/** 启动初始化：同步控件元数据到 component_def（按 code upsert）；初始化 admin/admin123。 */
+/** 启动初始化：同步控件元数据到 component_def（按 code upsert）；初始化管理员账号。 */
 @Component
 public class Bootstrap implements ApplicationRunner {
 
@@ -31,12 +32,15 @@ public class Bootstrap implements ApplicationRunner {
     private final ComponentDefRepo componentRepo;
     private final SysUserRepo userRepo;
     private final Environment env;
+    private final String adminInitialPassword;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
-    public Bootstrap(ComponentDefRepo componentRepo, SysUserRepo userRepo, Environment env) {
+    public Bootstrap(ComponentDefRepo componentRepo, SysUserRepo userRepo, Environment env,
+                     @Value("${sp.admin.initial-password:}") String adminInitialPassword) {
         this.componentRepo = componentRepo;
         this.userRepo = userRepo;
         this.env = env;
+        this.adminInitialPassword = adminInitialPassword;
     }
 
     @Override
@@ -81,14 +85,25 @@ public class Bootstrap implements ApplicationRunner {
     }
 
     private void initAdmin() {
-        if (userRepo.findByUsername("admin").isEmpty()) {
-            SysUser admin = new SysUser();
-            admin.setUsername("admin");
-            admin.setPasswordHash(encoder.encode("admin123"));
-            admin.setNickname("管理员");
-            admin.setRole("ADMIN");
-            userRepo.save(admin);
-            log.info("初始化管理员账号 admin/admin123");
+        if (userRepo.findByUsername("admin").isPresent()) {
+            return; // 已存在则不再初始化，避免覆盖运营已修改的密码
         }
+        boolean prod = List.of(env.getActiveProfiles()).contains("prod");
+        String password = adminInitialPassword;
+        if (password == null || password.isBlank()) {
+            if (prod) {
+                // prod 禁止用默认口令初始化：首次启动必须显式配置管理员初始密码
+                throw new IllegalStateException(
+                        "prod 环境首次启动必须配置管理员初始密码：sp.admin.initial-password（SPRING_APPLICATION_JSON）");
+            }
+            password = "admin123"; // dev 默认账号，见 README
+        }
+        SysUser admin = new SysUser();
+        admin.setUsername("admin");
+        admin.setPasswordHash(encoder.encode(password));
+        admin.setNickname("管理员");
+        admin.setRole("ADMIN");
+        userRepo.save(admin);
+        log.info("初始化管理员账号 admin（密码来自配置，不打印明文）");
     }
 }

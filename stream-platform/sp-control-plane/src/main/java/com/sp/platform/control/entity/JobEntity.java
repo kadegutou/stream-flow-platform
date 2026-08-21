@@ -9,6 +9,7 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 import java.time.LocalDateTime;
 
@@ -49,6 +50,11 @@ public class JobEntity {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    /** JPA 乐观锁版本号（区别于业务版本 version），并发更新时防丢改。 */
+    @Version
+    @Column(name = "opt_lock")
+    private Long optLock;
+
     @PrePersist
     void prePersist() {
         createdAt = LocalDateTime.now();
@@ -76,4 +82,6 @@ public class JobEntity {
     public void setOwnerId(Long ownerId) { this.ownerId = ownerId; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public Long getOptLock() { return optLock; }
+    public void setOptLock(Long optLock) { this.optLock = optLock; }
 }

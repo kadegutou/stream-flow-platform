@@ -141,7 +141,12 @@ public class WorkerInternalController {
                 continue;
             }
             if (s.get("status") != null) {
-                shard.setStatus(String.valueOf(s.get("status")));
+                String to = String.valueOf(s.get("status"));
+                if (validStatusTransition(shard.getStatus(), to)) {
+                    shard.setStatus(to);
+                } else {
+                    log.warn("忽略非法分片状态迁移: shard={} {}→{}", shardId, shard.getStatus(), to);
+                }
             }
             if (s.get("totalRows") != null) {
                 shard.setTotalRows(((Number) s.get("totalRows")).longValue());
@@ -201,5 +206,22 @@ public class WorkerInternalController {
             throw ApiException.badRequest("缺少参数: " + key);
         }
         return String.valueOf(v);
+    }
+
+    /**
+     * 分片状态只允许正向迁移：终态不可再变；STOPPING 只能到 STOPPED/FAILED；
+     * PENDING/RUNNING 只能到 RUNNING/STOPPED/FAILED（拒绝倒退，防止过期 RUNNING
+     * 上报把 STOPPING/终态顶回 RUNNING）。
+     */
+    private static boolean validStatusTransition(String from, String to) {
+        if (JobInstanceEntity.STOPPED.equals(from) || JobInstanceEntity.FAILED.equals(from)) {
+            return false;
+        }
+        if (JobInstanceEntity.STOPPING.equals(from)) {
+            return JobInstanceEntity.STOPPED.equals(to) || JobInstanceEntity.FAILED.equals(to);
+        }
+        return JobInstanceEntity.RUNNING.equals(to)
+                || JobInstanceEntity.STOPPED.equals(to)
+                || JobInstanceEntity.FAILED.equals(to);
     }
 }

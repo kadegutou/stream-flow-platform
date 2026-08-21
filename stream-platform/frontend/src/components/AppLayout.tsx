@@ -7,16 +7,17 @@ import {
   LogoutOutlined,
 } from '@ant-design/icons';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
 import { useAuthStore } from '../store/auth';
 
 const { Sider, Header, Content } = Layout;
 
 // 画布是作业的子页面（/jobs/:id/editor），从作业管理的「编辑画布」进入，不单列菜单
 const menuItems = [
-  { key: '/jobs', icon: <UnorderedListOutlined />, label: '作业管理' },
-  { key: '/components', icon: <AppstoreOutlined />, label: '控件列表' },
-  { key: '/users', icon: <UserOutlined />, label: '用户管理' },
-  { key: '/monitor', icon: <MonitorOutlined />, label: '运行监控' },
+  { key: '/jobs', icon: <UnorderedListOutlined />, label: '作业管理', adminOnly: false },
+  { key: '/components', icon: <AppstoreOutlined />, label: '控件列表', adminOnly: false },
+  { key: '/users', icon: <UserOutlined />, label: '用户管理', adminOnly: true },
+  { key: '/monitor', icon: <MonitorOutlined />, label: '运行监控', adminOnly: false },
 ];
 
 export default function AppLayout() {
@@ -24,10 +25,15 @@ export default function AppLayout() {
   const location = useLocation();
   const { nickname, role, logout } = useAuthStore();
 
+  const visibleMenuItems = useMemo(
+    () => menuItems.filter((m) => !m.adminOnly || role === 'ADMIN'),
+    [role],
+  );
+
   // 编辑器路由 /jobs/:id/editor 高亮「作业管理」
   const selectedKey = location.pathname.startsWith('/jobs')
     ? '/jobs'
-    : menuItems.find((m) => location.pathname.startsWith(m.key))?.key ?? '/jobs';
+    : visibleMenuItems.find((m) => location.pathname.startsWith(m.key))?.key ?? '/jobs';
 
   const handleLogout = () => {
     logout();
@@ -55,7 +61,7 @@ export default function AppLayout() {
           theme="dark"
           mode="inline"
           selectedKeys={[selectedKey]}
-          items={menuItems}
+          items={visibleMenuItems}
           onClick={({ key }) => navigate(key)}
         />
       </Sider>

@@ -36,9 +36,7 @@ import java.util.Map;
                   "properties": {
                     "hdfsUri":     {"type": "string",  "title": "HDFS 地址", "default": "hdfs://namenode:8020"},
                     "path":        {"type": "string",  "title": "文件路径"},
-                    "delimiter":   {"type": "string",  "title": "分隔符", "default": ","},
-                    "shardIndex":  {"type": "integer", "title": "分片序号(引擎注入)", "default": 0},
-                    "totalShards": {"type": "integer", "title": "总分片数(引擎注入)", "default": 1}
+                    "delimiter":   {"type": "string",  "title": "分隔符", "default": ","}
                   }
                 }
                 """)

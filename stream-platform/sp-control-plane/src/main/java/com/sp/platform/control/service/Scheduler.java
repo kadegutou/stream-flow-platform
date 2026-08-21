@@ -52,7 +52,7 @@ public class Scheduler {
         convergeInstances();
     }
 
-    /** 心跳超时的 Worker 置 OFFLINE，其 RUNNING/PENDING 分片重置为待派发。 */
+    /** 心跳超时的 Worker 置 OFFLINE，其 RUNNING/PENDING 分片重置为待派发；STOPPING 分片置 STOPPED。 */
     void handleWorkerTimeout() {
         LocalDateTime deadline = LocalDateTime.now().minusNanos(heartbeatTimeoutMs * 1_000_000);
         for (WorkerNodeEntity w : workerRepo.findByStatusAndLastHeartbeatBefore(
@@ -61,6 +61,11 @@ public class Scheduler {
             w.setStatus(WorkerNodeEntity.OFFLINE);
             workerRepo.save(w);
             shardRepo.resetByWorker(w.getId());
+            // STOPPING 分片若仍随 Worker 失联，直接置 STOPPED 避免下线状态机永久卡死
+            int stopped = shardRepo.stopShardsByWorker(w.getId());
+            if (stopped > 0) {
+                log.warn("Worker {} 失联时仍有 {} 个 STOPPING 分片，已强制置 STOPPED", w.getId(), stopped);
+            }
         }
     }
 

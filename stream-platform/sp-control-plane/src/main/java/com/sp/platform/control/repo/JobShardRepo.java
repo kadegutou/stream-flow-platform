@@ -33,4 +33,10 @@ public interface JobShardRepo extends JpaRepository<JobShardEntity, Long> {
     @Query("update JobShardEntity s set s.status = 'PENDING', s.workerId = null "
             + "where s.workerId = :workerId and s.status in ('PENDING', 'RUNNING')")
     int resetByWorker(@Param("workerId") Long workerId);
+
+    /** Worker 失联：其名下 STOPPING 分片直接置 STOPPED（下线意图优先，不再重派重跑）。 */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update JobShardEntity s set s.status = 'STOPPED', s.workerId = null "
+            + "where s.workerId = :workerId and s.status = 'STOPPING'")
+    int stopShardsByWorker(@Param("workerId") Long workerId);
 }

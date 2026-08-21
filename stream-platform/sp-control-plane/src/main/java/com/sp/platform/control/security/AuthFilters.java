@@ -1,5 +1,7 @@
 package com.sp.platform.control.security;
 
+import com.sp.platform.control.entity.SysUser;
+import com.sp.platform.control.repo.SysUserRepo;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -61,9 +63,11 @@ public final class AuthFilters {
         public static final String ATTR_ROLE = "authRole";
 
         private final JwtService jwtService;
+        private final SysUserRepo userRepo;
 
-        public JwtAuthFilter(JwtService jwtService) {
+        public JwtAuthFilter(JwtService jwtService, SysUserRepo userRepo) {
             this.jwtService = jwtService;
+            this.userRepo = userRepo;
         }
 
         @Override
@@ -87,9 +91,16 @@ public final class AuthFilters {
                 Object uid = claims.get("uid");
                 Long uidLong = uid instanceof Number n ? n.longValue()
                         : Long.valueOf(String.valueOf(uid));
+                // 吊销语义：每次请求按 uid 查库，用户被删除/禁用即 401；角色取库中当前值，
+                // 降权后旧 token 不再拥有旧角色（规避「禁用/删除/降权后旧 token 仍有效」）
+                SysUser user = userRepo.findById(uidLong).orElse(null);
+                if (user == null || user.getStatus() == null || user.getStatus() != 1) {
+                    writeError(resp, 401, "account disabled");
+                    return;
+                }
                 req.setAttribute(ATTR_UID, uidLong);
-                req.setAttribute(ATTR_USERNAME, claims.getSubject());
-                req.setAttribute(ATTR_ROLE, claims.get("role", String.class));
+                req.setAttribute(ATTR_USERNAME, user.getUsername());
+                req.setAttribute(ATTR_ROLE, user.getRole());
                 chain.doFilter(req, resp);
             } catch (Exception e) {
                 writeError(resp, 401, "invalid token");

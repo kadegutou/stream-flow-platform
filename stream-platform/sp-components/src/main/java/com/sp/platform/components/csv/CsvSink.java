@@ -43,9 +43,7 @@ import java.util.Set;
                   "properties": {
                     "path":        {"type": "string",  "title": "文件路径"},
                     "delimiter":   {"type": "string",  "title": "分隔符", "default": ","},
-                    "quoteMode":   {"type": "string",  "title": "引号模式(auto转义/none原样写出)", "enum": ["auto", "none"], "default": "auto"},
-                    "shardIndex":  {"type": "integer", "title": "分片序号(引擎注入)", "default": 0},
-                    "totalShards": {"type": "integer", "title": "总分片数(引擎注入)", "default": 1}
+                    "quoteMode":   {"type": "string",  "title": "引号模式(auto转义/none原样写出)", "enum": ["auto", "none"], "default": "auto"}
                   }
                 }
                 """)

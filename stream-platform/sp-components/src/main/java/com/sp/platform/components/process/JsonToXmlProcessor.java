@@ -9,6 +9,7 @@ import com.sp.platform.common.spi.ComponentDef;
 import com.sp.platform.common.spi.Processor;
 import com.sp.platform.components.Params;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,17 +47,18 @@ public class JsonToXmlProcessor implements Processor {
 
     @Override
     public List<Row> process(List<Row> batch) throws Exception {
-        for (int i = 0; i < batch.size(); i++) {
-            Row row = batch.get(i);
+        List<Row> out = new ArrayList<>(batch.size());
+        for (Row row : batch) {
             Object v = row.fields().get(field);
             if (v == null) {
+                out.add(row);
                 continue;
             }
             JsonNode tree = jsonMapper.readTree(String.valueOf(v));
             Map<String, Object> fields = new LinkedHashMap<>(row.fields());
             fields.put(targetField, xmlMapper.writeValueAsString(tree));
-            batch.set(i, new Row(fields));
+            out.add(new Row(fields));
         }
-        return batch;
+        return out;
     }
 }

@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS sp_job (
   owner_id    BIGINT       NOT NULL COMMENT '创建人',
   created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  opt_lock    BIGINT       NOT NULL DEFAULT 0 COMMENT 'JPA 乐观锁版本号（区别于业务 version）',
   PRIMARY KEY (id),
   KEY idx_owner (owner_id)
 ) ENGINE = InnoDB COMMENT = '作业表';
@@ -79,6 +80,8 @@ CREATE TABLE IF NOT EXISTS sp_job_shard (
   worker_id   BIGINT       NULL COMMENT '指派的 Worker，未分配为 NULL',
   status      VARCHAR(16)  NOT NULL COMMENT 'PENDING/RUNNING/STOPPING/STOPPED/FAILED',
   total_rows  BIGINT       NOT NULL DEFAULT 0,
+  progress    BIGINT       NOT NULL DEFAULT 0 COMMENT '断点续传：已读取字节偏移',
+  fence_token BIGINT       NOT NULL DEFAULT 0 COMMENT 'fencing token：每次重派 +1，防重复执行',
   updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_instance_shard (instance_id, shard_index),

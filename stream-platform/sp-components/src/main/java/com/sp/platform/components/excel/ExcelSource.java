@@ -81,8 +81,14 @@ public class ExcelSource implements Source {
         parserThread = Thread.ofVirtual().start(() -> {
             try (sheet) {
                 parser.parse(new InputSource(sheet));
-                queue.put(END);
+                if (!closed) {
+                    queue.put(END);
+                }
             } catch (Exception e) {
+                // 正常关闭：close() 中断了解析线程（或已关闭 pkg），不是解析失败，静默退出
+                if (closed) {
+                    return;
+                }
                 parseError = e;
                 try {
                     queue.put(ERROR);

@@ -277,6 +277,8 @@ function FlowCanvas() {
 
   useEffect(() => {
     if (selectedNode) {
+      // setFieldsValue 是 merge 语义：不清空会残留上一节点同名字段，污染当前节点参数
+      paramForm.resetFields();
       paramForm.setFieldsValue(selectedNode.data.params);
     }
   }, [selectedNodeId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -284,7 +286,13 @@ function FlowCanvas() {
   const onParamValuesChange = (_: unknown, allValues: Record<string, unknown>) => {
     if (!selectedNodeId) return;
     setNodes((nds) =>
-      nds.map((n) => (n.id === selectedNodeId ? { ...n, data: { ...n.data, params: allValues } } : n)),
+      nds.map((n) => {
+        if (n.id !== selectedNodeId) return n;
+        // 只写回当前控件 schema 声明的字段，防止残留字段随 DAG 保存
+        const schemaKeys = new Set(Object.keys(n.data.schema?.properties ?? {}));
+        const params = Object.fromEntries(Object.entries(allValues).filter(([k]) => schemaKeys.has(k)));
+        return { ...n, data: { ...n.data, params } };
+      }),
     );
   };
 

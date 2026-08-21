@@ -93,4 +93,19 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <build>
+        <plugins>
+            <!-- JDK 21 默认禁用动态 agent 加载（JEP 451），Mockito 内联 mock maker 自附着会失败
+                 （Could not self-attach / initialize plugin MockMaker）。以 javaagent 方式预装
+                 byte-buddy-agent（版本随 spring-boot-starter-parent 管理）规避自附着。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-javaagent:${settings.localRepository}/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

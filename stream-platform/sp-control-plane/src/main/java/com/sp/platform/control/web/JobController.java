@@ -128,7 +128,7 @@ public class JobController {
         JobEntity j = new JobEntity();
         j.setName(required(body, "name"));
         j.setDescription(body.get("description") == null ? null : String.valueOf(body.get("description")));
-        j.setParallelism(intOr(body.get("parallelism"), 1));
+        j.setParallelism(parallelismOf(body.get("parallelism")));
         // 创建作业允许空 DAG（先建作业再进画布编排）；上线时才强制校验 DAG 完整有效
         Object dag = body.get("dag");
         j.setDagJson(dag == null ? "{\"nodes\":[],\"edges\":[]}" : validateAndSerializeDag(dag));
@@ -143,8 +143,9 @@ public class JobController {
         return toDetailView(j);
     }
 
-    /** PUT /api/jobs/{id}：每次保存版本号 +1。 */
+    /** PUT /api/jobs/{id}：每次保存版本号 +1。@Transactional 保证读改写原子 + @Version 防并发丢改。 */
     @PutMapping("/{id}")
+    @Transactional
     public Map<String, Object> update(@PathVariable Long id, @RequestBody Map<String, Object> body,
                                       HttpServletRequest req) {
         JobEntity j = findJob(id);
@@ -159,7 +160,7 @@ public class JobController {
             j.setDescription(String.valueOf(body.get("description")));
         }
         if (body.get("parallelism") != null) {
-            j.setParallelism(intOr(body.get("parallelism"), 1));
+            j.setParallelism(parallelismOf(body.get("parallelism")));
         }
         if (body.get("dag") != null) {
             j.setDagJson(validateAndSerializeDag(body.get("dag")));
@@ -196,7 +197,9 @@ public class JobController {
     @PostMapping("/{id}/online")
     @Transactional
     public Map<String, Object> online(@PathVariable Long id, HttpServletRequest req) {
-        JobEntity j = findJob(id);
+        // 悲观锁串行化并发上线：两个并发请求只会有一个能创建实例，另一个在锁释放后看到 active 实例而冲突
+        JobEntity j = jobRepo.findByIdForUpdate(id)
+                .orElseThrow(() -> ApiException.notFound("作业不存在: " + id));
         checkOwner(j, req);
         if (!instanceRepo.findByJobIdAndStatusIn(id, ACTIVE).isEmpty()) {
             throw ApiException.conflict("作业已有运行中/待运行的实例，不能重复上线");
@@ -278,5 +281,14 @@ public class JobController {
             return n.intValue();
         }
         return Integer.parseInt(String.valueOf(v));
+    }
+
+    /** 并行度校验：1..256。0/负值会生成零分片实例永久挂 PENDING；过大值会生成海量分片打爆数据库。 */
+    private static int parallelismOf(Object v) {
+        int p = intOr(v, 1);
+        if (p < 1 || p > 256) {
+            throw ApiException.badRequest("并行度必须在 1..256 之间");
+        }
+        return p;
     }
 }

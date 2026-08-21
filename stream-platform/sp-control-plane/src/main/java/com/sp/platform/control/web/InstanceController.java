@@ -1,5 +1,7 @@
 package com.sp.platform.control.web;
 
+import com.sp.platform.common.dag.Dag;
+import com.sp.platform.common.dag.DagValidator;
 import com.sp.platform.control.entity.JobEntity;
 import com.sp.platform.control.entity.JobInstanceEntity;
 import com.sp.platform.control.entity.JobShardEntity;
@@ -21,11 +23,15 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** 实例监控：吞吐采样曲线。对应设计文档 §4.5。 */
 @RestController
 @RequestMapping("/api/instances")
 public class InstanceController {
+
+    /** 覆盖写（truncate/overwrite）类 Sink：断点续读会与覆盖写冲突导致输出缺前段数据。 */
+    private static final Set<String> OVERWRITE_SINKS = Set.of("csv-sink", "excel-sink", "hdfs-sink");
 
     private final JobInstanceRepo instanceRepo;
     private final JobMetricRepo metricRepo;
@@ -77,13 +83,19 @@ public class InstanceController {
                 && !JobInstanceEntity.STOPPED.equals(inst.getStatus())) {
             throw ApiException.conflict("仅 FAILED/STOPPED 实例可重跑，当前: " + inst.getStatus());
         }
+        // 覆盖写类 Sink 无法与断点续读组合：续读会跳过前段数据，而 Sink 覆盖写会丢前段 → 强制全量重跑
+        boolean forceFullReset = hasOverwriteSink(inst.getDagSnapshot());
         int reset = 0;
         for (JobShardEntity shard : shardRepo.findByInstanceId(id)) {
-            if (JobInstanceEntity.FAILED.equals(shard.getStatus())) {
+            String prev = shard.getStatus();
+            if (JobInstanceEntity.FAILED.equals(prev) || JobInstanceEntity.STOPPED.equals(prev)) {
                 shard.setStatus(JobInstanceEntity.PENDING);
                 shard.setWorkerId(null);
                 shard.setFenceToken(shard.getFenceToken() + 1); // fencing：作废旧 Worker
-                // progress 保留 → csv-source 从断点续读
+                if (forceFullReset || JobInstanceEntity.STOPPED.equals(prev)) {
+                    // 覆盖写 Sink 或正常停止实例：从头读，progress 清零；否则 FAILED 分片保留 progress 断点续读
+                    shard.setProgress(0L);
+                }
                 shardRepo.save(shard);
                 reset++;
             }
@@ -96,5 +108,16 @@ public class InstanceController {
         resp.put("ok", true);
         resp.put("resetShards", reset);
         return resp;
+    }
+
+    /** DAG 快照中是否含覆盖写类 Sink（csv/excel/hdfs 输出）。解析失败视为 true（保守全量重跑）。 */
+    private static boolean hasOverwriteSink(String dagSnapshot) {
+        try {
+            Dag dag = DagValidator.fromJson(dagSnapshot);
+            return DagValidator.toPipeline(dag).sinks().stream()
+                    .anyMatch(n -> OVERWRITE_SINKS.contains(n.componentCode()));
+        } catch (Exception e) {
+            return true;
+        }
     }
 }

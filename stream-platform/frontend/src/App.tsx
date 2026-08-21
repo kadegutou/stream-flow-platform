@@ -14,6 +14,12 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   return children;
 }
 
+function RequireAdmin({ children }: { children: JSX.Element }) {
+  const role = useAuthStore((s) => s.role);
+  if (role !== 'ADMIN') return <Navigate to="/jobs" replace />;
+  return children;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -31,7 +37,14 @@ export default function App() {
           <Route path="jobs" element={<Jobs />} />
           <Route path="jobs/:id/editor" element={<JobEditor />} />
           <Route path="components" element={<Components />} />
-          <Route path="users" element={<Users />} />
+          <Route
+            path="users"
+            element={
+              <RequireAdmin>
+                <Users />
+              </RequireAdmin>
+            }
+          />
           <Route path="monitor" element={<Monitor />} />
           <Route path="*" element={<Navigate to="/jobs" replace />} />
         </Route>
