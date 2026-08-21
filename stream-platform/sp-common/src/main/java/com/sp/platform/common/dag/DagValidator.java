@@ -10,16 +10,19 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * DAG 校验器。对应设计文档 §4.3。
  *
- * <p>v1 执行引擎只支持线性链，校验与之对齐：DAG 必须恰好构成一条
- * 1 个 SOURCE → 0..N 个 PROCESS → 1 个 SINK 的链：
- * SOURCE 出度 1、SINK 入度 1、PROCESS 出入度各 1、无环、无悬空节点，
- * 且每个节点 params 必填项齐（按 schema required 简单校验）。
+ * <p>v2 执行引擎支持「扇出广播」：1 个 SOURCE → 0..N 个串行 PROCESS → M 个 SINK。
+ * 规则：恰好 1 个 SOURCE（入度 0）；PROCESS 入度 1、出度 ≥1 且构成一条串行链；
+ * SINK 入度 1、出度 0，且所有 SINK 的前驱必须是同一个链尾节点（链尾=最后一个
+ * PROCESS，无 PROCESS 时为 SOURCE）。不支持扇入/多源合并。
+ * 每个节点 params 必填项齐（按 schema required 简单校验）。
  */
 public class DagValidator {
 
@@ -83,9 +86,8 @@ public class DagValidator {
                     if (in > 0) {
                         throw new IllegalArgumentException("SOURCE 节点不能有前驱: " + n.id());
                     }
-                    if (out != 1) {
-                        throw new IllegalArgumentException(
-                                "SOURCE 节点必须恰好 1 条出边: " + n.id() + "，当前 " + out + " 条");
+                    if (out < 1) {
+                        throw new IllegalArgumentException("SOURCE 节点缺少出边: " + n.id());
                     }
                 }
                 case "SINK" -> {
@@ -99,17 +101,13 @@ public class DagValidator {
                     }
                 }
                 case "PROCESS" -> {
-                    if (out > 1) {
-                        throw new IllegalArgumentException(
-                                "暂不支持分支：节点 " + n.id() + " 存在 " + out + " 条出边");
-                    }
-                    if (out == 0) {
-                        throw new IllegalArgumentException(
-                                "PROCESS 节点缺少出边（链路必须到达 SINK）: " + n.id());
-                    }
                     if (in != 1) {
                         throw new IllegalArgumentException(
                                 "PROCESS 节点必须恰好 1 条入边: " + n.id() + "，当前 " + in + " 条");
+                    }
+                    if (out < 1) {
+                        throw new IllegalArgumentException(
+                                "PROCESS 节点缺少出边（链路必须到达 SINK）: " + n.id());
                     }
                 }
                 default -> throw new IllegalArgumentException("未知控件类别: " + category);
@@ -118,29 +116,71 @@ public class DagValidator {
         if (sources != 1) {
             throw new IllegalArgumentException("DAG 必须恰好包含 1 个 SOURCE，当前: " + sources);
         }
-        if (sinks != 1) {
-            throw new IllegalArgumentException("DAG 必须恰好包含 1 个 SINK，当前: " + sinks);
+        if (sinks < 1) {
+            throw new IllegalArgumentException("DAG 至少包含 1 个 SINK");
         }
 
         assertAcyclic(dag.nodes(), outgoing, inDegree);
-        assertSingleChain(dag.nodes(), outgoing);
+        assertChainWithFanout(dag.nodes(), outgoing, nodeById);
     }
 
-    /** 从唯一 SOURCE 沿出边走必须覆盖全部节点（排除悬空的 PROCESS 环等）。 */
-    private void assertSingleChain(List<Node> nodes, Map<String, List<String>> outgoing) {
-        String start = nodes.stream()
+    /**
+     * 链式结构 + 扇出校验：从 SOURCE 沿唯一出边走过 PROCESS 链，链尾节点的所有出边
+     * 必须全部指向 SINK，且每个 SINK 的前驱都是该链尾；最终覆盖全部节点。
+     */
+    private void assertChainWithFanout(List<Node> nodes, Map<String, List<String>> outgoing,
+                                       Map<String, Node> nodeById) {
+        String cur = nodes.stream()
                 .filter(n -> "SOURCE".equals(metaByCode.get(n.componentCode()).category()))
                 .map(Node::id).findFirst().orElseThrow();
-        int visited = 0;
-        String cur = start;
-        while (cur != null) {
-            visited++;
-            List<String> next = outgoing.get(cur);
-            cur = next.isEmpty() ? null : next.get(0);
+        Set<String> visited = new HashSet<>();
+        visited.add(cur);
+        // 沿串行 PROCESS 链前进
+        while (true) {
+            List<String> outs = outgoing.get(cur);
+            long procTargets = outs.stream()
+                    .filter(t -> "PROCESS".equals(metaByCode.get(nodeById.get(t).componentCode()).category()))
+                    .count();
+            if (outs.size() > 1 && procTargets > 0) {
+                throw new IllegalArgumentException(
+                        "暂不支持分支：节点 " + cur + " 存在 " + outs.size()
+                                + " 条出边（仅链尾节点可扇出到多个 SINK）");
+            }
+            if (outs.size() == 1 && procTargets == 1) {
+                cur = outs.get(0);
+                if (!visited.add(cur)) {
+                    throw new IllegalArgumentException("DAG 存在环（经过节点 " + cur + "）");
+                }
+                continue;
+            }
+            break; // cur 为链尾（或所有出边都指向 SINK 的节点）
         }
-        if (visited != nodes.size()) {
+        // 链尾的所有出边必须全部指向 SINK
+        String chainEnd = cur;
+        for (String t : outgoing.get(chainEnd)) {
+            if (!"SINK".equals(metaByCode.get(nodeById.get(t).componentCode()).category())) {
+                throw new IllegalArgumentException(
+                        "暂不支持分支：节点 " + chainEnd + " 的出边只能指向 SINK");
+            }
+        }
+        // 每个 SINK 的前驱必须是链尾节点
+        int sinkCount = 0;
+        for (Node n : nodes) {
+            if ("SINK".equals(metaByCode.get(n.componentCode()).category())) {
+                sinkCount++;
+                // SINK 入度已校验为 1，其唯一前驱 = 链尾
+                boolean fromChainEnd = outgoing.get(chainEnd).contains(n.id());
+                if (!fromChainEnd) {
+                    throw new IllegalArgumentException(
+                            "SINK 节点 " + n.id() + " 的前驱必须是链尾节点 " + chainEnd
+                                    + "（不支持扇入/多来源）");
+                }
+            }
+        }
+        if (visited.size() + sinkCount != nodes.size()) {
             throw new IllegalArgumentException(
-                    "DAG 不是一条完整线性链：从 SOURCE 出发只覆盖 " + visited + "/" + nodes.size() + " 个节点");
+                    "DAG 存在游离节点：链覆盖 " + visited.size() + " 个 + SINK " + sinkCount
+                            + " 个，总计 " + nodes.size() + " 个节点");
         }
     }
 
@@ -214,32 +254,48 @@ public class DagValidator {
         }
     }
 
-    /** 供 Worker 使用：把链式 DAG 拓扑排序为节点序列（v1 仅支持线性链）。 */
-    public static List<Node> toLinearChain(Dag dag) {
+    /** 流水线结构：串行链（SOURCE + PROCESS...）+ 扇出 SINK 列表。 */
+    public record Pipeline(List<Node> chain, List<Node> sinks) {
+    }
+
+    /**
+     * 供 Worker 使用：把 DAG 拆成「串行链 + 扇出 SINK」。
+     * 调用前应先通过 validate()；本方法对非法结构直接抛 IllegalArgumentException。
+     */
+    public static Pipeline toPipeline(Dag dag) {
         Map<String, Node> nodeById = new HashMap<>();
-        Map<String, String> next = new HashMap<>();
+        Map<String, List<String>> outgoing = new HashMap<>();
         Map<String, Integer> inDegree = new HashMap<>();
         for (Node n : dag.nodes()) {
             nodeById.put(n.id(), n);
+            outgoing.put(n.id(), new ArrayList<>());
             inDegree.put(n.id(), 0);
         }
         for (Dag.Edge e : dag.edges() == null ? List.<Dag.Edge>of() : dag.edges()) {
-            if (next.put(e.from(), e.to()) != null) {
-                throw new IllegalArgumentException("v1 执行引擎仅支持线性链：节点 " + e.from() + " 存在多个出边");
-            }
+            outgoing.get(e.from()).add(e.to());
             inDegree.merge(e.to(), 1, Integer::sum);
         }
-        List<Node> chain = new ArrayList<>();
         String cur = inDegree.entrySet().stream().filter(en -> en.getValue() == 0)
                 .map(Map.Entry::getKey).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("DAG 存在环或无起始节点"));
+        List<Node> chain = new ArrayList<>();
+        List<Node> sinks = new ArrayList<>();
         while (cur != null) {
-            chain.add(nodeById.get(cur));
-            cur = next.get(cur);
+            List<String> outs = outgoing.get(cur);
+            if (outs.size() == 1 && inDegree.get(outs.get(0)) == 1
+                    && !outgoing.get(outs.get(0)).isEmpty()) {
+                // 唯一后继且仍有出边 → 链上节点
+                chain.add(nodeById.get(cur));
+                cur = outs.get(0);
+            } else {
+                // 链尾：其余出边指向的都是 SINK
+                chain.add(nodeById.get(cur));
+                for (String t : outs) {
+                    sinks.add(nodeById.get(t));
+                }
+                cur = null;
+            }
         }
-        if (chain.size() != dag.nodes().size()) {
-            throw new IllegalArgumentException("v1 执行引擎仅支持线性链：DAG 存在分支或环");
-        }
-        return chain;
+        return new Pipeline(chain, sinks);
     }
 }

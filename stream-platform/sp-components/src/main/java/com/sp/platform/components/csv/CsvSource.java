@@ -43,6 +43,7 @@ import java.util.Map;
                     "hasHeader":   {"type": "boolean", "title": "首行为表头", "default": true},
                     "batchSize":   {"type": "integer", "title": "批大小", "default": 5000},
                     "quoteMode":   {"type": "string",  "title": "引号模式(auto走RFC4180/none纯快速切分，不支持字段内换行)", "enum": ["auto", "none"], "default": "auto"},
+                    "resumeOffset": {"type": "integer", "title": "断点续读偏移(引擎注入)", "default": 0},
                     "shardIndex":  {"type": "integer", "title": "分片序号(引擎注入)", "default": 0},
                     "totalShards": {"type": "integer", "title": "总分片数(引擎注入)", "default": 1}
                   }
@@ -64,16 +65,26 @@ public class CsvSource implements Source {
         boolean hasHeader = Params.bool(params, "hasHeader", true);
         this.batchSize = Params.integer(params, "batchSize", 5000);
         this.quoteMode = Params.str(params, "quoteMode", "auto");
+        long resumeOffset = Params.integer(params, "resumeOffset", 0);
         int shardIndex = Params.integer(params, "shardIndex", 0);
         int totalShards = Params.integer(params, "totalShards", 1);
 
         File file = new File(path);
         ShardUtils.ByteRange range = ShardUtils.range(file.length(), shardIndex, totalShards);
         FileInputStream fis = new FileInputStream(file);
-        fis.getChannel().position(range.start());
-        // 8MB 缓冲：ShardedLineReader 按字节读，底层必须缓冲
-        this.reader = new ShardedLineReader(new BufferedInputStream(fis, 8 * 1024 * 1024), range);
-        if (hasHeader && shardIndex == 0) {
+        if (resumeOffset > range.start()) {
+            // 断点续传：偏移由本组件在行边界记录，直接定位、不丢首行
+            long start = Math.min(resumeOffset, file.length());
+            fis.getChannel().position(start);
+            this.reader = new ShardedLineReader(new BufferedInputStream(fis, 8 * 1024 * 1024),
+                    new ShardUtils.ByteRange(start, range.endExclusive()),
+                    java.nio.charset.StandardCharsets.UTF_8, false);
+        } else {
+            fis.getChannel().position(range.start());
+            // 8MB 缓冲：ShardedLineReader 按字节读，底层必须缓冲
+            this.reader = new ShardedLineReader(new BufferedInputStream(fis, 8 * 1024 * 1024), range);
+        }
+        if (hasHeader && shardIndex == 0 && resumeOffset <= 0) {
             // 0 号分片的字节区间包含表头：从分片流中消费首行作为列名，不作为数据行
             String line = reader.readLine();
             if (line == null) {
@@ -81,9 +92,15 @@ public class CsvSource implements Source {
             }
             this.header = split(line);
         } else if (hasHeader) {
-            // 其余分片的区间不含表头：独立打开文件读首行获取列名（只读首行，开销可忽略）
+            // 其余分片/断点续读的区间不含表头：独立打开文件读首行获取列名（开销可忽略）
             this.header = readHeader(file);
         }
+    }
+
+    /** 断点续传：当前已读字节偏移（行边界），引擎随上报持久化到分片 progress。 */
+    @Override
+    public long progress() {
+        return reader == null ? -1 : reader.position();
     }
 
     /** 非 0 号分片独立打开文件头读首行作为列名。 */

@@ -9,6 +9,8 @@ import com.sp.platform.control.repo.JobMetricRepo;
 import com.sp.platform.control.repo.JobShardRepo;
 import com.sp.platform.control.repo.WorkerNodeRepo;
 import com.sp.platform.control.web.ApiExceptionHandler.ApiException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,6 +31,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/worker")
 public class WorkerInternalController {
+
+    private static final Logger log = LoggerFactory.getLogger(WorkerInternalController.class);
 
     private final WorkerNodeRepo workerRepo;
     private final JobShardRepo shardRepo;
@@ -87,6 +91,8 @@ public class WorkerInternalController {
             a.put("shardIndex", shard.getShardIndex());
             a.put("totalShards", shardRepo.countByInstanceId(inst.getId()));
             a.put("shardKey", shard.getShardKey());
+            a.put("fenceToken", shard.getFenceToken());
+            a.put("resumeOffset", shard.getProgress()); // 断点续传：上次已读偏移
             assignments.add(a);
         }
         List<Long> stopShardIds = shardRepo.findByWorkerIdAndStatus(
@@ -100,8 +106,11 @@ public class WorkerInternalController {
     }
 
     /**
-     * POST /report {workerId, shards:[{shardId,status,totalRows,rowsPerSec,errorMsg}]} → {ok:true}
-     * 更新分片状态/行数，聚合更新 job_instance.total_rows，每次上报写一条 job_metric 采样。
+     * POST /report {workerId, shards:[{shardId,status,totalRows,rowsPerSec,errorMsg,fenceToken,progress}]}
+     * → {ok:true, stopShardIds:[...]}
+     * 更新分片状态/行数/断点偏移，聚合更新 job_instance.total_rows，每次上报写一条 job_metric 采样。
+     * fencing：上报 fenceToken 与分片当前值不匹配（分片已被重派他人）→ 拒绝该上报，
+     * 并通过响应 stopShardIds 通知 Worker 立即停止本地执行。
      */
     @PostMapping("/report")
     @Transactional
@@ -110,6 +119,7 @@ public class WorkerInternalController {
         Object shardsObj = body.get("shards");
         List<?> shards = shardsObj instanceof List<?> l ? l : List.of();
 
+        List<Long> rejected = new ArrayList<>();
         Map<Long, Long> rowsPerSecByInstance = new HashMap<>();
         Map<Long, String> errorByInstance = new HashMap<>();
         for (Object o : shards) {
@@ -121,11 +131,26 @@ public class WorkerInternalController {
             if (shard == null || !worker.getId().equals(shard.getWorkerId())) {
                 continue; // 分片已被重新派发，忽略过期上报
             }
+            // fencing token 校验
+            long reportToken = s.get("fenceToken") == null ? -1L
+                    : ((Number) s.get("fenceToken")).longValue();
+            if (reportToken != shard.getFenceToken()) {
+                log.warn("拒绝过期 fenceToken 上报: shard={} report={} current={}",
+                        shardId, reportToken, shard.getFenceToken());
+                rejected.add(shardId);
+                continue;
+            }
             if (s.get("status") != null) {
                 shard.setStatus(String.valueOf(s.get("status")));
             }
             if (s.get("totalRows") != null) {
                 shard.setTotalRows(((Number) s.get("totalRows")).longValue());
+            }
+            if (s.get("progress") != null) {
+                long progress = ((Number) s.get("progress")).longValue();
+                if (progress >= 0) {
+                    shard.setProgress(progress); // 断点续传偏移
+                }
             }
             shardRepo.save(shard);
             rowsPerSecByInstance.merge(shard.getInstanceId(),
@@ -155,7 +180,10 @@ public class WorkerInternalController {
                 metricRepo.save(metric);
             });
         }
-        return Map.of("ok", true);
+        Map<String, Object> resp = new LinkedHashMap<String, Object>();
+        resp.put("ok", true);
+        resp.put("stopShardIds", rejected); // fencing 拒绝的分片 → Worker 立即停止
+        return resp;
     }
 
     private WorkerNodeEntity findWorker(Map<String, Object> body) {

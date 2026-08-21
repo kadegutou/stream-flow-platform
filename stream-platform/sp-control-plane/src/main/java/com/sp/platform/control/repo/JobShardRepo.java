@@ -22,9 +22,9 @@ public interface JobShardRepo extends JpaRepository<JobShardEntity, Long> {
             + "where s.workerId in :workerIds and s.status = 'RUNNING' group by s.workerId")
     List<Object[]> countRunningByWorkerIds(@Param("workerIds") List<Long> workerIds);
 
-    /** 乐观锁抢占：仅当分片仍 PENDING 且未分配时才指派成功，影响行数=1 才算抢到。 */
+    /** 乐观锁抢占：仅当分片仍 PENDING 且未分配时才指派成功；抢占同时 fenceToken+1。 */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("update JobShardEntity s set s.workerId = :workerId "
+    @Query("update JobShardEntity s set s.workerId = :workerId, s.fenceToken = s.fenceToken + 1 "
             + "where s.id = :id and s.status = 'PENDING' and s.workerId is null")
     int assign(@Param("id") Long id, @Param("workerId") Long workerId);
 

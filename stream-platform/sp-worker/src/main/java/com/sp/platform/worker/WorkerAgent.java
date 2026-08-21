@@ -96,16 +96,13 @@ public class WorkerAgent implements ApplicationRunner {
                                 String.valueOf(a.get("dagSnapshot")),
                                 ((Number) a.get("shardIndex")).intValue(),
                                 ((Number) a.get("totalShards")).intValue(),
-                                a.get("shardKey") == null ? null : String.valueOf(a.get("shardKey"))));
+                                a.get("shardKey") == null ? null : String.valueOf(a.get("shardKey")),
+                                a.get("fenceToken") == null ? 0L : ((Number) a.get("fenceToken")).longValue(),
+                                a.get("resumeOffset") == null ? 0L : ((Number) a.get("resumeOffset")).longValue()));
                     }
                 }
             }
-            Object stopIds = resp.get("stopShardIds");
-            if (stopIds instanceof List<?> list) {
-                for (Object o : list) {
-                    engine.stop(((Number) o).longValue());
-                }
-            }
+            handleStopIds(resp.get("stopShardIds"));
         } catch (Exception e) {
             // 控制面重启/换库后 workerId 失效：置空并重新注册，实现自动恢复
             if (e.getMessage() != null && e.getMessage().contains("Worker 不存在")) {
@@ -136,11 +133,23 @@ public class WorkerAgent implements ApplicationRunner {
                 m.put("totalRows", r.totalRows());
                 m.put("rowsPerSec", r.rowsPerSec());
                 m.put("errorMsg", r.errorMsg());
+                m.put("fenceToken", r.fenceToken());
+                m.put("progress", r.progress());
                 return m;
             }).toList();
-            post("/api/worker/report", Map.of("workerId", workerId, "shards", shards));
+            Map<?, ?> resp = post("/api/worker/report", Map.of("workerId", workerId, "shards", shards));
+            // 上报被控制面拒绝的分片（fenceToken 过期，已被重派）→ 本地立即停止
+            handleStopIds(resp.get("stopShardIds"));
         } catch (Exception e) {
             log.warn("上报失败: {}", e.getMessage());
+        }
+    }
+
+    private void handleStopIds(Object stopIds) {
+        if (stopIds instanceof List<?> list) {
+            for (Object o : list) {
+                engine.stop(((Number) o).longValue());
+            }
         }
     }
 

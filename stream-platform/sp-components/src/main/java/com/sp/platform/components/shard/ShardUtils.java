@@ -62,11 +62,25 @@ public final class ShardUtils {
         }
 
         public ShardedLineReader(InputStream positionedIn, ByteRange range, Charset charset) {
+            this(positionedIn, range, charset, range.start() > 0);
+        }
+
+        /**
+         * @param discardFirstLine true=起点可能在行中间，丢弃第一行（分片场景）；
+         *                         false=起点已对齐行边界（断点续传场景，offset 由本组件记录）
+         */
+        public ShardedLineReader(InputStream positionedIn, ByteRange range, Charset charset,
+                                 boolean discardFirstLine) {
             this.in = positionedIn;
             this.charset = charset;
             this.endExclusive = range.endExclusive();
             this.consumed = range.start();
-            this.firstLineDiscarded = range.start() <= 0; // start=0 无需丢弃
+            this.firstLineDiscarded = !discardFirstLine;
+        }
+
+        /** 当前读取进度（绝对字节偏移，行边界）。断点续传上报用。 */
+        public long position() {
+            return consumed;
         }
 
         /**

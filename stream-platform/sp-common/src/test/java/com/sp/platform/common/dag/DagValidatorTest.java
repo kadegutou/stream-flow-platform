@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -103,30 +104,59 @@ class DagValidatorTest {
     }
 
     @Test
-    void multiSinkRejected() {
+    void multiSinkFanoutAccepted() {
+        // 扇出广播：链尾连多个 SINK 是合法的（多路转发）
         Dag dag = new Dag(List.of(
                 new Node("n1", "csv-source", Map.of("path", "in.csv")),
-                new Node("n2", "csv-sink", Map.of("path", "a.csv")),
-                new Node("n3", "csv-sink", Map.of("path", "b.csv"))),
-                List.of(new Edge("n1", "n2"), new Edge("n1", "n3")));
+                new Node("n2", "field-concat",
+                        Map.of("sourceFields", List.of("A"), "targetField", "C")),
+                new Node("n3", "csv-sink", Map.of("path", "a.csv")),
+                new Node("n4", "csv-sink", Map.of("path", "b.csv"))),
+                List.of(new Edge("n1", "n2"), new Edge("n2", "n3"), new Edge("n2", "n4")));
+        assertDoesNotThrow(() -> validator.validate(dag));
+    }
+
+    @Test
+    void directSourceFanoutAccepted() {
+        // 无 PROCESS：SOURCE 直接扇出到多个 SINK
+        Dag dag = new Dag(List.of(
+                new Node("n1", "csv-source", Map.of("path", "in.csv")),
+                new Node("n3", "csv-sink", Map.of("path", "a.csv")),
+                new Node("n4", "csv-sink", Map.of("path", "b.csv"))),
+                List.of(new Edge("n1", "n3"), new Edge("n1", "n4")));
+        assertDoesNotThrow(() -> validator.validate(dag));
+    }
+
+    @Test
+    void sinksWithDifferentPredecessorsRejected() {
+        // sinkB 的前驱不是链尾 → 拒绝
+        Dag dag = new Dag(List.of(
+                new Node("n1", "csv-source", Map.of("path", "in.csv")),
+                new Node("n2", "field-concat",
+                        Map.of("sourceFields", List.of("A"), "targetField", "C")),
+                new Node("n3", "csv-sink", Map.of("path", "a.csv")),
+                new Node("n4", "csv-sink", Map.of("path", "b.csv"))),
+                List.of(new Edge("n1", "n2"), new Edge("n2", "n3"), new Edge("n1", "n4")));
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                 () -> validator.validate(dag));
-        // SOURCE 出边 2 条 或 SINK 数量不为 1，均应拒绝
-        assertTrue(e.getMessage().contains("SOURCE") || e.getMessage().contains("SINK"));
+        // SOURCE 同时连 PROCESS 和 SINK：属于分支，拒绝
+        assertTrue(e.getMessage().contains("分支") || e.getMessage().contains("链尾"),
+                e.getMessage());
     }
 
     @Test
     void branchRejected() {
-        // n2 分出两条出边：明确报“暂不支持分支”
+        // n2 分出两条出边（一条到 PROCESS n3、一条到 SINK n4）：明确报“暂不支持分支”
         Dag dag = new Dag(List.of(
                 new Node("n1", "csv-source", Map.of("path", "in.csv")),
                 new Node("n2", "field-concat",
                         Map.of("sourceFields", List.of("A"), "targetField", "C")),
                 new Node("n3", "field-concat",
                         Map.of("sourceFields", List.of("A"), "targetField", "D")),
-                new Node("n4", "csv-sink", Map.of("path", "out.csv"))),
+                new Node("n4", "csv-sink", Map.of("path", "out.csv")),
+                new Node("n5", "csv-sink", Map.of("path", "out2.csv"))),
                 List.of(new Edge("n1", "n2"), new Edge("n2", "n3"), new Edge("n2", "n4"),
-                        new Edge("n3", "n4")));
+                        new Edge("n3", "n5")));
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                 () -> validator.validate(dag));
         assertTrue(e.getMessage().contains("暂不支持分支"), e.getMessage());
@@ -156,9 +186,24 @@ class DagValidatorTest {
 
     @Test
     void linearChainOrder() {
-        List<Node> chain2 = DagValidator.toLinearChain(chain());
-        assertTrue(chain2.get(0).id().equals("n1")
-                && chain2.get(1).id().equals("n2")
-                && chain2.get(2).id().equals("n3"));
+        DagValidator.Pipeline p = DagValidator.toPipeline(chain());
+        assertTrue(p.chain().get(0).id().equals("n1")
+                && p.chain().get(1).id().equals("n2")
+                && p.sinks().size() == 1
+                && p.sinks().get(0).id().equals("n3"));
+    }
+
+    @Test
+    void pipelineWithFanout() {
+        Dag dag = new Dag(List.of(
+                new Node("n1", "csv-source", Map.of("path", "in.csv")),
+                new Node("n2", "field-concat",
+                        Map.of("sourceFields", List.of("A"), "targetField", "C")),
+                new Node("n3", "csv-sink", Map.of("path", "a.csv")),
+                new Node("n4", "csv-sink", Map.of("path", "b.csv"))),
+                List.of(new Edge("n1", "n2"), new Edge("n2", "n3"), new Edge("n2", "n4")));
+        DagValidator.Pipeline p = DagValidator.toPipeline(dag);
+        assertEquals(2, p.chain().size());
+        assertEquals(2, p.sinks().size());
     }
 }

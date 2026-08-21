@@ -5,6 +5,11 @@ spring:
   application:
     name: sp-worker
 
+# 日志同时写文件（控制面在线查看 Worker 日志用）
+logging:
+  file:
+    name: logs/worker.log
+
 sp:
   # 控制面地址
   control-plane-url: http://localhost:8080

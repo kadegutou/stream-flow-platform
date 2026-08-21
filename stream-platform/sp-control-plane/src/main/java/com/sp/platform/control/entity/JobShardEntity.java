@@ -46,6 +46,14 @@ public class JobShardEntity {
     @Column(name = "total_rows", nullable = false)
     private Long totalRows = 0L;
 
+    /** 断点续传：已读取的字节偏移（Worker 周期性上报，重跑时续读） */
+    @Column(name = "progress", nullable = false)
+    private Long progress = 0L;
+
+    /** fencing token：每次（重新）派发 +1；Worker 上报携带，不匹配说明已被重派 */
+    @Column(name = "fence_token", nullable = false)
+    private Long fenceToken = 0L;
+
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
@@ -73,5 +81,9 @@ public class JobShardEntity {
     public void setStatus(String status) { this.status = status; }
     public Long getTotalRows() { return totalRows; }
     public void setTotalRows(Long totalRows) { this.totalRows = totalRows; }
+    public Long getProgress() { return progress; }
+    public void setProgress(Long progress) { this.progress = progress; }
+    public Long getFenceToken() { return fenceToken; }
+    public void setFenceToken(Long fenceToken) { this.fenceToken = fenceToken; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

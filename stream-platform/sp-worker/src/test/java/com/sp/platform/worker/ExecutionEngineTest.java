@@ -53,7 +53,7 @@ class ExecutionEngineTest {
         ExecutionEngine engine = new ExecutionEngine();
         Path out = dir.resolve("out.csv");
         engine.start(new ShardAssignment(1L, 1L,
-                dag(dir.resolve("not-exist.csv").toString(), out.toString(), 5000), 0, 1, null));
+                dag(dir.resolve("not-exist.csv").toString(), out.toString(), 5000), 0, 1, null, 0L, 0L));
 
         ShardReport report = awaitTerminal(engine, 1L);
 
@@ -74,7 +74,7 @@ class ExecutionEngineTest {
         }
         Path out = dir.resolve("out.csv");
         ExecutionEngine engine = new ExecutionEngine();
-        engine.start(new ShardAssignment(2L, 2L, dag(in.toString(), out.toString(), 100), 0, 1, null));
+        engine.start(new ShardAssignment(2L, 2L, dag(in.toString(), out.toString(), 100), 0, 1, null, 0L, 0L));
 
         // 等流水线跑起来后发出停止指令
         Thread.sleep(300);
@@ -92,7 +92,7 @@ class ExecutionEngineTest {
         Files.writeString(in, "c1,c2\n" + "a,b\n".repeat(1000));
         Path out = dir.resolve("small-out.csv");
         ExecutionEngine engine = new ExecutionEngine();
-        engine.start(new ShardAssignment(3L, 3L, dag(in.toString(), out.toString(), 5000), 0, 1, null));
+        engine.start(new ShardAssignment(3L, 3L, dag(in.toString(), out.toString(), 5000), 0, 1, null, 0L, 0L));
 
         ShardReport report = awaitTerminal(engine, 3L);
         assertEquals("STOPPED", report.status());
