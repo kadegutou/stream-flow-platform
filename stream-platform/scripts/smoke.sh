@@ -14,20 +14,24 @@ ROWS=100000
 CP_PID=""
 WK_PID=""
 
+# Git Bash 的 pkill 杀不掉 Windows java 进程，按端口用 taskkill 清理
+kill_ports() {
+  for PID in $(netstat -ano | grep -E ':(8080|8081)\s.*LISTENING' | awk '{print $NF}' | sort -u); do
+    taskkill //PID "$PID" //F > /dev/null 2>&1 || true
+  done
+}
 cleanup() {
   echo "[smoke] 清理后台进程"
   [ -n "$CP_PID" ] && kill "$CP_PID" 2>/dev/null || true
   [ -n "$WK_PID" ] && kill "$WK_PID" 2>/dev/null || true
-  pkill -f 'sp-control-plane-1.0.0.jar' 2>/dev/null || true
-  pkill -f 'sp-worker-1.0.0.jar' 2>/dev/null || true
+  kill_ports
 }
 trap cleanup EXIT
 
 echo "[smoke] $(date '+%F %T') 端到端冒烟开始"
 
 # 0. 清理残留进程
-pkill -f 'sp-control-plane-1.0.0.jar' 2>/dev/null || true
-pkill -f 'sp-worker-1.0.0.jar' 2>/dev/null || true
+kill_ports
 sleep 1
 
 # 1. 构建（jar 缺失时）
@@ -85,7 +89,7 @@ cat > "$BODY_FILE" <<EOF
 EOF
 CREATE=$(curl -s -X POST "$CP_URL/api/jobs" -H "$AUTH" -H 'Content-Type: application/json; charset=utf-8' --data-binary "@$BODY_FILE")
 echo "[smoke] 创建作业: $CREATE"
-JOB_ID=$(echo "$CREATE" | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*')
+JOB_ID=$(echo "$CREATE" | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*' || true)
 [ -n "$JOB_ID" ] || { echo "[smoke] 创建作业失败"; exit 1; }
 
 # 7. 上线
@@ -98,7 +102,7 @@ STATUS=""
 LAST=""
 for _ in $(seq 1 120); do
   RESP=$(curl -s "$CP_URL/api/jobs/$JOB_ID/instances" -H "$AUTH")
-  STATUS=$(echo "$RESP" | sed -n 's/.*"status":"\([^"]*\)".*/\1/p' | head -1)
+  STATUS=$(echo "$RESP" | sed -n 's/.*"status":"\([^"]*\)".*/\1/p' | head -1 || true)
   if [ "$STATUS" != "$LAST" ]; then echo "[smoke] 实例状态: $STATUS"; LAST="$STATUS"; fi
   case "$STATUS" in STOPPED|FAILED) break;; esac
   sleep 2
@@ -121,7 +125,7 @@ echo "$HEAD_LINE" | grep -q 'concat_col' || { echo "[smoke] 表头缺少拼接�
 [ "$COLS" = "11" ] || { echo "[smoke] 列数校验失败"; exit 1; }
 
 # 10. 指标采样
-INST_ID=$(echo "$RESP" | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*')
+INST_ID=$(echo "$RESP" | grep -o '"id":[0-9]*' | head -1 | grep -o '[0-9]*' || true)
 METRICS=$(curl -s "$CP_URL/api/instances/$INST_ID/metrics" -H "$AUTH")
 echo "[smoke] 吞吐采样: $METRICS"
 
