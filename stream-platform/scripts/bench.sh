@@ -4,16 +4,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 IN=${1:?输入csv路径}; ROWS=${2:?行数}; TAG=${3:-run}
-OUT="C:/tmp/sp-test/bench-out-${TAG}.csv"
+# OUT=Worker 视角的输出路径；OUT_HOST=本机校验路径（Docker 部署时填宿主机映射路径）
+OUT=${OUT:-C:/tmp/sp-test/bench-out-${TAG}.csv}
+OUT_HOST=${OUT_HOST:-$OUT}
 BASE=http://localhost:8080/api
 
 TOKEN=$(curl -s -X POST $BASE/auth/login -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}' | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
 AUTH="Authorization: Bearer $TOKEN"
 
-rm -f "$OUT"
+rm -f "$OUT_HOST"
 # 创建作业
-JOB=$(curl -s -X POST $BASE/jobs -H "$AUTH" -H "Content-Type: application/json" -d "{\"name\":\"bench-${TAG}\",\"parallelism\":1}")
+JOB=$(curl -s -X POST $BASE/jobs -H "$AUTH" -H "Content-Type: application/json" -d "{\"name\":\"bench-${TAG}\",\"parallelism\":${PARALLELISM:-1}}")
 JID=$(echo "$JOB" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
 # 保存 DAG
 curl -s -X PUT $BASE/jobs/$JID -H "$AUTH" -H "Content-Type: application/json" -d "{\"dag\":{\"nodes\":[
@@ -32,8 +34,14 @@ while true; do
 done
 T1=$(date +%s%N)
 ELAPSED=$(awk -v a="$T0" -v b="$T1" 'BEGIN{printf "%.1f", (b-a)/1e9}')
-OUTROWS=$(wc -l < "$OUT")
-OUTBYTES=$(wc -c < "$OUT")
+if [ -f "$OUT_HOST" ]; then
+  OUTROWS=$(wc -l < "$OUT_HOST")
+  OUTBYTES=$(wc -c < "$OUT_HOST")
+else
+  # 多分片输出：汇总 part 文件（命名：去 .csv 后缀 + .partN.csv）
+  OUTROWS=$(cat "${OUT_HOST%.csv}".part*.csv | wc -l)
+  OUTBYTES=$(cat "${OUT_HOST%.csv}".part*.csv | wc -c)
+fi
 # 收尾：下线清理作业
 curl -s -X POST $BASE/jobs/$JID/offline -H "$AUTH" > /dev/null 2>&1 || true
 sleep 1

@@ -9,6 +9,8 @@ COPY sp-common/pom.xml sp-common/
 COPY sp-components/pom.xml sp-components/
 COPY sp-control-plane/pom.xml sp-control-plane/
 COPY sp-worker/pom.xml sp-worker/
+# 国内构建加速：阿里云 Maven 镜像（海外环境可删除此行）
+COPY deploy/maven-settings.xml /root/.m2/settings.xml
 RUN mvn -B -q -DskipTests dependency:go-offline || true
 
 # 拷贝本模块及其依赖模块源码并构建（-am 连带构建 sp-common、sp-components）

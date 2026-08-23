@@ -1,6 +1,6 @@
 -- 通用流处理任务管理平台 MySQL 建库建表脚本（prod profile）
 -- 按《数据库设计说明书》§2 字段定义；表名统一加 sp_ 前缀（与 JPA Entity 一致），
--- JSON 大字段使用 MySQL JSON 类型。字符集 utf8mb4，引擎 InnoDB。
+-- JSON 大字段使用 LONGTEXT（应用侧保证 JSON 合法性；JPA 以 String 映射，兼容 H2/MySQL）。字符集 utf8mb4，引擎 InnoDB。
 
 CREATE DATABASE IF NOT EXISTS stream_platform
   DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS sp_component_def (
   category     VARCHAR(16)  NOT NULL COMMENT 'SOURCE / PROCESS / SINK',
   description  VARCHAR(512) NULL,
   icon         VARCHAR(64)  NULL,
-  param_schema JSON         NOT NULL COMMENT '参数 JSON Schema',
+  param_schema LONGTEXT     NOT NULL COMMENT '参数 JSON Schema',
   impl_class   VARCHAR(256) NOT NULL COMMENT '实现类全限定名',
   builtin      TINYINT      NOT NULL DEFAULT 1 COMMENT '1 内置 0 自定义',
   created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS sp_job (
   id          BIGINT       NOT NULL AUTO_INCREMENT,
   name        VARCHAR(128) NOT NULL,
   description VARCHAR(512) NULL,
-  dag_json    JSON         NOT NULL COMMENT 'DAG 定义（nodes + edges）',
+  dag_json    LONGTEXT     NOT NULL COMMENT 'DAG 定义（nodes + edges）',
   version     INT          NOT NULL DEFAULT 1,
   parallelism INT          NOT NULL DEFAULT 1,
   owner_id    BIGINT       NOT NULL COMMENT '创建人',
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS sp_job_instance (
   id           BIGINT   NOT NULL AUTO_INCREMENT,
   job_id       BIGINT   NOT NULL,
   job_version  INT      NOT NULL COMMENT '上线时的作业版本快照号',
-  dag_snapshot JSON     NOT NULL COMMENT '上线时 DAG 快照',
+  dag_snapshot LONGTEXT     NOT NULL COMMENT '上线时 DAG 快照',
   status       VARCHAR(16) NOT NULL COMMENT 'PENDING/RUNNING/STOPPING/STOPPED/FAILED',
   total_rows   BIGINT   NOT NULL DEFAULT 0,
   error_msg    TEXT     NULL,

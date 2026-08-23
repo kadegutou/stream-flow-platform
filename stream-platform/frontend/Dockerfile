@@ -3,6 +3,8 @@ FROM node:20-alpine AS build
 WORKDIR /app
 # 先拷贝依赖清单，利用 Docker 层缓存
 COPY package.json package-lock.json ./
+# 国内构建加速：npm 走 npmmirror（海外环境可删除此行）
+RUN npm config set registry https://registry.npmmirror.com
 RUN npm ci
 COPY . .
 RUN npm run build

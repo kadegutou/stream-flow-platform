@@ -81,7 +81,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: stream123
       # 自定义 sp.* 配置：sp.jwt.secret（Base64 HS256 密钥）、sp.worker-token（Worker 共享密钥）
       # 生产环境务必替换这两个值；worker 服务中的 sp.worker-token 必须与此处一致
-      SPRING_APPLICATION_JSON: '{"sp":{"jwt":{"secret":"c3RyZWFtLXBsYXRmb3JtLWRldi1zZWNyZXQta2V5LTAxMjM0NTY3ODlhYmNkZWY="},"worker-token":"dev-token"}}'
+      SPRING_APPLICATION_JSON: '{"sp":{"jwt":{"secret":"ddthjK2c+bt1BrP+OyqOSvYn21vGjoT+gfziIBA4EbSV51ELCk1a1UcGuwDIun8f"},"worker-token":"ca508945777bd13c59de97f59e1af49ce24c056b17739744","admin":{"initial-password":"admin123"}}}'
       JAVA_TOOL_OPTIONS: "-Xmx2g"
     ports:
       - "8080:8080"
@@ -102,7 +102,7 @@ services:
       dockerfile: sp-worker/Dockerfile
     environment:
       # sp.control-plane-url 指向控制面；sp.worker-token 与控制面一致
-      SPRING_APPLICATION_JSON: '{"sp":{"control-plane-url":"http://control-plane:8080","worker-token":"dev-token"}}'
+      SPRING_APPLICATION_JSON: '{"sp":{"control-plane-url":"http://control-plane:8080","worker-token":"ca508945777bd13c59de97f59e1af49ce24c056b17739744"}}'
       JAVA_TOOL_OPTIONS: "-Xmx4g"
       # 注意：故意不设置 WORKER_NODE_CODE 与 container_name，
       # 保证 --scale worker=N 时各容器以各自 hostname 注册为不同节点
