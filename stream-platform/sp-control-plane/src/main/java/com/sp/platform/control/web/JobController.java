@@ -1,6 +1,7 @@
 package com.sp.platform.control.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sp.platform.common.dag.Dag;
 import com.sp.platform.common.dag.DagValidator;
 import com.sp.platform.components.ComponentRegistry;
 import com.sp.platform.control.entity.JobEntity;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** 作业 CRUD、DAG 校验、上线/下线、实例查询。对应设计文档 §4.3 / §4.4。 */
 @RestController
@@ -35,6 +37,20 @@ public class JobController {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final List<String> ACTIVE = List.of(
             JobInstanceEntity.PENDING, JobInstanceEntity.RUNNING, JobInstanceEntity.STOPPING);
+
+    /**
+     * 不支持并行分片的数据源：不读取 shardIndex/totalShards，并行度>1 时每个分片
+     * 执行同一条 SQL / 读同一文件 → 输出 N 倍重复数据。
+     * （对比 csv-source / hdfs-source 有字节切片分片）
+     */
+    private static final Set<String> NON_SHARDABLE_SOURCES = Set.of(
+            "mysql-source", "postgresql-source", "oracle-source", "excel-source");
+
+    /**
+     * 不支持并行分片的输出：不写 .partN 分文件，并行度>1 时多个分片并发写同一路径
+     * → 数据互相覆盖/文件损坏。（对比 csv-sink / hdfs-sink 有 shardPath 分片）
+     */
+    private static final Set<String> NON_SHARDABLE_SINKS = Set.of("excel-sink");
 
     private final JobRepo jobRepo;
     private final JobInstanceRepo instanceRepo;
@@ -71,6 +87,28 @@ public class JobController {
         new DagValidator(ComponentRegistry.getInstance().listMeta())
                 .validate(DagValidator.fromJson(json));
         return json;
+    }
+
+    /**
+     * 分片兼容性校验：并行度>1 时，DAG 中若含不支持并行分片的源/汇控件则拒绝。
+     * 防止 N 倍重复数据（JDBC/Excel 源）与并发写文件损坏（excel-sink）。
+     * 空 DAG（未编排的占位图）直接放行，交 DAG 校验负责。
+     */
+    private static void validateShardCompatibility(Dag dag, int parallelism) {
+        if (parallelism <= 1 || dag == null || dag.nodes() == null || dag.nodes().isEmpty()) {
+            return;
+        }
+        for (Dag.Node n : dag.nodes()) {
+            String code = n.componentCode();
+            if (NON_SHARDABLE_SOURCES.contains(code)) {
+                throw ApiException.badRequest("控件 " + code + " 不支持并行分片：并行度>1 时每个分片会读取全量数据"
+                        + "造成 N 倍重复输出。请将并行度设为 1，或改用支持分片的源（csv-source / hdfs-source）");
+            }
+            if (NON_SHARDABLE_SINKS.contains(code)) {
+                throw ApiException.badRequest("控件 " + code + " 不支持并行分片：并行度>1 时多个分片会并发写同一文件"
+                        + "导致数据互相覆盖/文件损坏。请将并行度设为 1，或改用支持分片输出的汇（csv-sink / hdfs-sink）");
+            }
+        }
     }
 
     private Map<String, Object> toListView(JobEntity j) {
@@ -132,6 +170,8 @@ public class JobController {
         // 创建作业允许空 DAG（先建作业再进画布编排）；上线时才强制校验 DAG 完整有效
         Object dag = body.get("dag");
         j.setDagJson(dag == null ? "{\"nodes\":[],\"edges\":[]}" : validateAndSerializeDag(dag));
+        // 并行度>1 + 不支持分片的源/汇：创建时即拦截，避免保存后误上线产生重复数据
+        validateShardCompatibility(DagValidator.fromJson(j.getDagJson()), j.getParallelism());
         j.setOwnerId(uid(req));
         return toDetailView(jobRepo.save(j));
     }
@@ -165,6 +205,8 @@ public class JobController {
         if (body.get("dag") != null) {
             j.setDagJson(validateAndSerializeDag(body.get("dag")));
         }
+        // 保存前校验：并行度>1 时禁用不支持分片的源/汇（防 N 倍重复/并发写损坏）
+        validateShardCompatibility(DagValidator.fromJson(j.getDagJson()), j.getParallelism());
         j.setVersion(j.getVersion() + 1);
         return toDetailView(jobRepo.save(j));
     }
@@ -205,8 +247,10 @@ public class JobController {
             throw ApiException.conflict("作业已有运行中/待运行的实例，不能重复上线");
         }
         // 上线前强制校验 DAG：空 DAG 或编排不合法时不允许上线
-        new DagValidator(ComponentRegistry.getInstance().listMeta())
-                .validate(DagValidator.fromJson(j.getDagJson()));
+        Dag dag = DagValidator.fromJson(j.getDagJson());
+        new DagValidator(ComponentRegistry.getInstance().listMeta()).validate(dag);
+        // 分片兼容性：并行度>1 且含不支持分片的源/汇时拒绝上线（最终防线）
+        validateShardCompatibility(dag, j.getParallelism());
         JobInstanceEntity inst = new JobInstanceEntity();
         inst.setJobId(j.getId());
         inst.setJobVersion(j.getVersion());
