@@ -222,7 +222,7 @@ public class JobController {
         return instanceView(inst);
     }
 
-    /** POST /api/jobs/{id}/offline：最新运行中实例置 STOPPING（分片同步置 STOPPING）。 */
+    /** POST /api/jobs/{id}/offline：最新运行中实例置 STOPPING（分片按状态分别处理）。 */
     @PostMapping("/{id}/offline")
     @Transactional
     public Map<String, Object> offline(@PathVariable Long id, HttpServletRequest req) {
@@ -236,9 +236,14 @@ public class JobController {
         inst.setStatus(JobInstanceEntity.STOPPING);
         instanceRepo.save(inst);
         for (JobShardEntity shard : shardRepo.findByInstanceId(inst.getId())) {
-            if (JobInstanceEntity.PENDING.equals(shard.getStatus())
-                    || JobInstanceEntity.RUNNING.equals(shard.getStatus())) {
+            if (JobInstanceEntity.RUNNING.equals(shard.getStatus())) {
+                // 有 Worker 在执行：置 STOPPING，由 Worker 优雅停止后上报 STOPPED
                 shard.setStatus(JobInstanceEntity.STOPPING);
+                shardRepo.save(shard);
+            } else if (JobInstanceEntity.PENDING.equals(shard.getStatus())) {
+                // 尚未被派发/执行的分片：直接置终态 STOPPED。
+                // 若置 STOPPING 会因无执行者上报而永久卡住（实例无法收敛，下线失效）
+                shard.setStatus(JobInstanceEntity.STOPPED);
                 shardRepo.save(shard);
             }
         }
