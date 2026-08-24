@@ -78,15 +78,22 @@ public abstract class AbstractJdbcSource implements Source {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
+        // 流式结果集可能未读完（作业中途停止/FAILED）：先 cancel 中断服务器端查询，
+        // 避免 rs.close() 阻塞（MySQL 流式模式下未读完全部结果集时关闭会等待）。
+        // 各步骤独立 try-catch，确保 conn.close() 一定执行，防止连接未释放、
+        // 未提交事务长期持有 MySQL 元数据锁（MDL）。
+        if (stmt != null) {
+            try { stmt.cancel(); } catch (Exception ignored) { }
+        }
         if (rs != null) {
-            rs.close();
+            try { rs.close(); } catch (Exception ignored) { }
         }
         if (stmt != null) {
-            stmt.close();
+            try { stmt.close(); } catch (Exception ignored) { }
         }
         if (conn != null) {
-            conn.close();
+            try { conn.close(); } catch (Exception ignored) { }
         }
     }
 }

@@ -49,23 +49,30 @@ public abstract class AbstractJdbcSink implements Sink {
 
     @Override
     public void write(List<Row> batch) throws Exception {
-        for (Row row : batch) {
-            for (int i = 0; i < fields.size(); i++) {
-                ps.setObject(i + 1, row.fields().get(fields.get(i)));
+        try {
+            for (Row row : batch) {
+                for (int i = 0; i < fields.size(); i++) {
+                    ps.setObject(i + 1, row.fields().get(fields.get(i)));
+                }
+                ps.addBatch();
             }
-            ps.addBatch();
+            ps.executeBatch();
+            conn.commit();
+        } catch (Exception e) {
+            // 写失败回滚事务，立即释放该批持有的元数据锁（MDL），避免挂到连接 close 才释放
+            try { conn.rollback(); } catch (Exception ignored) { }
+            throw e;
         }
-        ps.executeBatch();
-        conn.commit();
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
+        // 各步骤独立 try-catch：确保 conn.close() 一定执行（释放连接与未提交事务，避免持锁泄漏）
         if (ps != null) {
-            ps.close();
+            try { ps.close(); } catch (Exception ignored) { }
         }
         if (conn != null) {
-            conn.close();
+            try { conn.close(); } catch (Exception ignored) { }
         }
     }
 }
