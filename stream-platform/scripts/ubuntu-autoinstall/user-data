@@ -1,0 +1,24 @@
+#cloud-config
+# Ubuntu Server 24.04 无人值守安装配置（subiquity autoinstall）。
+# 配合 make-autoinstall-iso.sh 打成全自动安装 ISO：开机 → 全自动装完 → 自动重启。
+# 产出系统：en 语言 / 整盘 LVM / 用户 ubuntu:ubuntu123 / 已装 OpenSSH / apt 已换清华源。
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  identity:
+    hostname: ubuntu-sp
+    username: ubuntu
+    password: "$6$/lCFxI9RKZOhxmcB$5mAnmy374PLBerjMRAIHIDwmAHMZpymQkOCeig//2qRaRlNSU2Ti60RlxELLWulDJAuVdPNViPz4bCX8uxJ6e1"
+  ssh:
+    install-server: true
+    allow-pw: true
+  storage:
+    layout:
+      name: lvm
+  # 不保留任何交互式环节，安装全程无需看屏
+  interactive-sections: []
+  late-commands:
+    # 换清华镜像源加速后续 apt（国内友好；失败不影响安装结果）
+    - 'curtin in-target -- sh -c "sed -i s#http://archive.ubuntu.com#https://mirrors.tuna.tsinghua.edu.cn#g; s#http://security.ubuntu.com#https://mirrors.tuna.tsinghua.edu.cn#g /etc/apt/sources.list.d/ubuntu.sources" || true'
