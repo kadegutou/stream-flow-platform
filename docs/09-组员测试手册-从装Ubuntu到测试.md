@@ -37,6 +37,18 @@ VMware 菜单 → 新建虚拟机 → 自定义：
 
 ## 三、安装 Ubuntu Server（优先全自动，不用看英文界面）
 
+### 自动化脚本说明（本手册用到的两个脚本）
+
+项目 `scripts/ubuntu-autoinstall/` 下有两个自动化脚本，覆盖「装系统 + 配环境」全流程：
+
+| 脚本 | 作用 | 谁用 | 用法见 |
+|---|---|---|---|
+| `make-autoinstall-iso.sh` | 把官方 Ubuntu ISO 打包成「无人值守自动安装 ISO」 | **组长**（组员直接用打包结果） | 3.4 |
+| `setup-env.sh` | 装完系统后**一键配置环境**：Docker + Compose、免 sudo、git、换清华源、建数据目录 | **每个组员** | 第四章 |
+
+> **组员只用做一件事**：下载 3.1 的自动安装 ISO → 挂载装系统 → SSH 进去跑第四章的 `setup-env.sh`。
+> 两个脚本都不用自己碰；打包那步由组长在 Linux/WSL 环境做一次。
+
 ### 3.1 方式 A：用「自动安装 ISO」（推荐，全程不用看英文界面）
 
 我已经把「无人值守自动安装 ISO」打包好了，直接从群文件、网盘下载：
@@ -126,23 +138,29 @@ scp 本地文件 ubuntu@192.168.5.135:~/
 
 **多开窗口**：用 Windows Terminal / MobaXterm 多开标签，一个窗口跑部署、一个看日志，别都挤在一个 SSH 里。
 
-### 3.4 附：自己打包自动安装 ISO（可选）
+### 3.4 附：组长打包自动安装 ISO（只需做一次）
 
-想自己动手的组员用。需要**一个 Linux/WSL 环境**（或任何能跑 bash 的机器），步骤如下：
+用 `make-autoinstall-iso.sh` 把官方 ISO 打包成自动安装 ISO。**这一步由组长做一次**，打好的 ISO 发到群文件/网盘，组员按 3.1 下载使用（组员不用碰本脚本）。
+
+需要**一个 Linux/WSL 环境**（组长自己那台 Ubuntu VM、或本机 WSL 都行），步骤如下：
 
 ```bash
-# 1. 装打包依赖（只需一次）
+# 1. 装打包依赖（只需一次）：p7zip-full 解包 ISO / xorriso 重新打包 / isolinux 提供 MBR
 sudo apt install -y p7zip-full xorriso isolinux
 
 # 2. 取项目脚本
 git clone https://github.com/kadegutou/stream-flow-platform.git
 cd stream-platform/scripts/ubuntu-autoinstall
 
-# 3. 打包：把官方 ISO 路径放进参数，产物 ubuntu-24.04-autoinstall.iso
+# 3. 打包：把官方 ISO 路径放进参数，产物是 ubuntu-24.04-autoinstall.iso
 bash make-autoinstall-iso.sh ~/下载/ubuntu-24.04.4-live-server-amd64.iso
+
+# 4. 把产物发到群文件/网盘，告诉组员文件名即可
 ```
 
-打包出的 ISO 挂到 VMware 光驱即自动安装（同 3.1）。
+- **产物**：当前目录下的 `ubuntu-24.04-autoinstall.iso`（约 2.6GB）
+- **打包失败排查**：提示「缺少 7z/xorriso/isolinux」→ 先跑第 1 步装依赖；提示「未能注入 autoinstall」→ ISO 版本不对，用 24.04.x 官方 Server 版
+- 打包脚本会自动完成：注入无人值守配置 + 改引导参数 + 重新打包，无需手动干预
 
 ---
 
