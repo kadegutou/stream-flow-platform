@@ -57,8 +57,15 @@ public class ExecutionEngine {
 
     private final Map<Long, ShardRunner> runners = new ConcurrentHashMap<>();
 
-    /** 领取分片：已存在则忽略（心跳可能重复下发同一 PENDING 分片）。 */
+    /** 领取分片：同 fenceToken 重复下发则忽略；更高 fenceToken（重派）则中止旧执行并替换。 */
     public void start(ShardAssignment assignment) {
+        ShardRunner existing = runners.get(assignment.shardId());
+        if (existing != null && assignment.fenceToken() > existing.assignment.fenceToken()) {
+            log.warn("分片 {} 收到更高 fenceToken（{} > {}），中止旧执行并替换",
+                    assignment.shardId(), assignment.fenceToken(), existing.assignment.fenceToken());
+            existing.abort();
+            runners.remove(assignment.shardId(), existing);
+        }
         runners.computeIfAbsent(assignment.shardId(), id -> {
             ShardRunner runner = new ShardRunner(assignment);
             Thread.ofVirtual().name("shard-" + id + "-main").start(runner::run);
@@ -74,6 +81,15 @@ public class ExecutionEngine {
         if (runner != null) {
             log.info("分片 {} 收到停止指令", shardId);
             runner.requestStop();
+        }
+    }
+
+    /** 立即中止（fencing 拒绝场景）：丢弃在途批次——新 owner 会从已确认断点重放，丢弃可避免双写。 */
+    public void abort(long shardId) {
+        ShardRunner runner = runners.get(shardId);
+        if (runner != null) {
+            log.warn("分片 {} 被 fencing 拒绝，立即中止", shardId);
+            runner.abort();
         }
     }
 
@@ -96,20 +112,23 @@ public class ExecutionEngine {
     static final class ShardRunner {
 
         /**
-         * 管道中传递的批次：rows + 完成计数（扇出时 = Sink 数）+ 写完回执 + 单调序号。
+         * 管道中传递的批次：rows + 完成计数（扇出时 = Sink 数）+ 写完回执 + 单调序号
+         * + 读完该批时 Source 的偏移（endProgress）。
          * 全部 Sink 写完该批才累计行数并回调 ack（at-least-once）。
          * seq 从 1 起按 poll() 产生顺序递增，随批次原样传递到各 Sink，
          * 供 AckAware 按序对齐（扇出时完成顺序可能与产生顺序不一致）。
          */
-        private record Batch(List<Row> rows, AtomicInteger pendingSinks, AckAware ack, long seq) {
+        private record Batch(List<Row> rows, AtomicInteger pendingSinks, AckAware ack, long seq,
+                             long endProgress) {
         }
 
-        private static final Batch POISON = new Batch(null, null, null, 0L); // 毒丸（身份比较）
+        private static final Batch POISON = new Batch(null, null, null, 0L, -1L); // 毒丸（身份比较）
 
         private final ShardAssignment assignment;
         private final AtomicLong totalRows = new AtomicLong();
 
         private volatile boolean stopRequested;
+        private volatile boolean aborted; // fencing 中止：各循环立即退出，在途批次丢弃
         private volatile boolean failed;
         private volatile String errorMsg;
         private volatile String status = "RUNNING";
@@ -117,6 +136,12 @@ public class ExecutionEngine {
 
         private Source source;
         private final List<Sink> sinkList = new ArrayList<>();
+        /**
+         * 已确认断点：最后一批被【全部 Sink 写完】的批次对应的 Source 偏移。
+         * 不能用 source.progress() 实时值——Source 会因队列缓冲预读，
+         * 上报预读偏移会导致恢复时跳过未写出的行（静默丢数据）。-1 = 尚无可上报断点。
+         */
+        private final AtomicLong ackedProgress = new AtomicLong(-1);
 
         // 速率统计：两次上报间的增量 / 间隔
         private long lastSampleTime = System.currentTimeMillis();
@@ -131,6 +156,13 @@ public class ExecutionEngine {
             closeQuietly(source); // 唤醒阻塞中的 poll（如 Kafka wakeup），文件类 close 幂等无害
         }
 
+        /** fencing 中止：比优雅停止更激进——处理/Sink 线程不再取新批次，尽快退出。 */
+        void abort() {
+            aborted = true;
+            stopRequested = true;
+            closeQuietly(source);
+        }
+
         boolean isTerminal() {
             return "STOPPED".equals(status) || "FAILED".equals(status);
         }
@@ -142,7 +174,7 @@ public class ExecutionEngine {
             long rps = (total - lastSampleTotal) * 1000 / elapsed;
             lastSampleTime = now;
             lastSampleTotal = total;
-            long progress = source == null ? -1 : source.progress();
+            long progress = ackedProgress.get(); // 仅上报已确认偏移；-1 时控制面不更新
             return new ShardReport(assignment.shardId(), status, total, rps, errorMsg,
                     assignment.fenceToken(), progress);
         }
@@ -186,8 +218,15 @@ public class ExecutionEngine {
                                     if (rows.isEmpty()) {
                                         break; // EOF
                                     }
+                                    // 读完本批后的 Source 偏移：该批被全部 Sink 写完后才允许上报为断点
+                                    long endProgress;
+                                    try {
+                                        endProgress = source.progress();
+                                    } catch (Exception e) {
+                                        endProgress = -1;
+                                    }
                                     Batch batch = new Batch(rows, new AtomicInteger(sinks.size()),
-                                            ack, batchSeq.getAndIncrement());
+                                            ack, batchSeq.getAndIncrement(), endProgress);
                                     offerWhileRunning(q1, batch);
                                 }
                             } catch (InterruptedException e) {
@@ -206,7 +245,7 @@ public class ExecutionEngine {
                 Thread proc = Thread.ofVirtual().name("shard-" + assignment.shardId() + "-process")
                         .start(() -> {
                             try {
-                                while (!failed) {
+                                while (!failed && !aborted) {
                                     Batch batch = q1.poll(100, TimeUnit.MILLISECONDS);
                                     if (batch == null) {
                                         continue;
@@ -218,7 +257,8 @@ public class ExecutionEngine {
                                     for (Processor p : processors) {
                                         rows = p.process(rows);
                                     }
-                                    Batch out = new Batch(rows, batch.pendingSinks(), batch.ack(), batch.seq());
+                                    Batch out = new Batch(rows, batch.pendingSinks(), batch.ack(),
+                                            batch.seq(), batch.endProgress());
                                     for (ArrayBlockingQueue<Batch> q : sinkQueues) {
                                         offerWhileRunning(q, out); // 逐个 put：最慢 Sink 形成背压
                                     }
@@ -240,7 +280,7 @@ public class ExecutionEngine {
                             .name("shard-" + assignment.shardId() + "-sink-" + i)
                             .start(() -> {
                                 try {
-                                    while (!failed) {
+                                    while (!failed && !aborted) {
                                         Batch batch = q.poll(100, TimeUnit.MILLISECONDS);
                                         if (batch == null) {
                                             continue;
@@ -249,9 +289,13 @@ public class ExecutionEngine {
                                             break;
                                         }
                                         sink.write(batch.rows());
-                                        // 全部 Sink 写完：累计行数 + at-least-once 回执
+                                        // 全部 Sink 写完：累计行数 + 推进已确认断点 + at-least-once 回执
                                         if (batch.pendingSinks().decrementAndGet() == 0) {
                                             totalRows.addAndGet(batch.rows().size());
+                                            if (batch.endProgress() >= 0) {
+                                                ackedProgress.updateAndGet(
+                                                        prev -> Math.max(prev, batch.endProgress()));
+                                            }
                                             if (batch.ack() != null) {
                                                 batch.ack().onBatchWritten(batch.seq());
                                             }
@@ -296,9 +340,9 @@ public class ExecutionEngine {
             }
         }
 
-        /** 毒丸广播（失败时跳过，各线程靠 failed 标志退出）。 */
+        /** 毒丸广播（失败/中止时跳过，各线程靠标志位退出）。 */
         private void poisonAll(List<ArrayBlockingQueue<Batch>> queues) {
-            if (failed) {
+            if (failed || aborted) {
                 return;
             }
             for (ArrayBlockingQueue<Batch> q : queues) {

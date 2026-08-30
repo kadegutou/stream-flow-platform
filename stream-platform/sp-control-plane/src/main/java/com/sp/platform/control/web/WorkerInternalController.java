@@ -107,10 +107,10 @@ public class WorkerInternalController {
 
     /**
      * POST /report {workerId, shards:[{shardId,status,totalRows,rowsPerSec,errorMsg,fenceToken,progress}]}
-     * → {ok:true, stopShardIds:[...]}
+     * → {ok:true, abortShardIds:[...]}
      * 更新分片状态/行数/断点偏移，聚合更新 job_instance.total_rows，每次上报写一条 job_metric 采样。
      * fencing：上报 fenceToken 与分片当前值不匹配（分片已被重派他人）→ 拒绝该上报，
-     * 并通过响应 stopShardIds 通知 Worker 立即停止本地执行。
+     * 并通过响应 abortShardIds 通知 Worker 立即中止本地执行。
      */
     @PostMapping("/report")
     @Transactional
@@ -187,7 +187,8 @@ public class WorkerInternalController {
         }
         Map<String, Object> resp = new LinkedHashMap<String, Object>();
         resp.put("ok", true);
-        resp.put("stopShardIds", rejected); // fencing 拒绝的分片 → Worker 立即停止
+        // fencing 拒绝的分片：新 owner 会从已确认断点重放，旧执行应立即中止（丢弃在途批次避免双写）
+        resp.put("abortShardIds", rejected);
         return resp;
     }
 

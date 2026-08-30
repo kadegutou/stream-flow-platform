@@ -147,8 +147,8 @@ public class WorkerAgent implements ApplicationRunner {
                 return m;
             }).toList();
             Map<?, ?> resp = post("/api/worker/report", Map.of("workerId", workerId, "shards", shards));
-            // 上报被控制面拒绝的分片（fenceToken 过期，已被重派）→ 本地立即停止
-            handleStopIds(resp.get("stopShardIds"));
+            // 上报被控制面 fencing 拒绝的分片（已被重派）→ 立即中止本地执行（防双写）
+            handleAbortIds(resp.get("abortShardIds"));
         } catch (Exception e) {
             log.warn("上报失败: {}", e.getMessage());
         }
@@ -158,6 +158,14 @@ public class WorkerAgent implements ApplicationRunner {
         if (stopIds instanceof List<?> list) {
             for (Object o : list) {
                 engine.stop(((Number) o).longValue());
+            }
+        }
+    }
+
+    private void handleAbortIds(Object abortIds) {
+        if (abortIds instanceof List<?> list) {
+            for (Object o : list) {
+                engine.abort(((Number) o).longValue());
             }
         }
     }

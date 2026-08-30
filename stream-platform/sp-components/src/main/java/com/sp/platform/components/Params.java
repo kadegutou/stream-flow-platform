@@ -33,6 +33,18 @@ public final class Params {
         return Integer.parseInt(String.valueOf(v));
     }
 
+    /** long 参数解析（字节偏移等可能超过 int 范围的值必须用它）。 */
+    public static long longVal(Map<String, Object> params, String key, long def) {
+        Object v = params.get(key);
+        if (v == null) {
+            return def;
+        }
+        if (v instanceof Number n) {
+            return n.longValue();
+        }
+        return Long.parseLong(String.valueOf(v));
+    }
+
     public static boolean bool(Map<String, Object> params, String key, boolean def) {
         Object v = params.get(key);
         if (v == null) {

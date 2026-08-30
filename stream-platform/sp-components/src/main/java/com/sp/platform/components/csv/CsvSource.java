@@ -48,6 +48,8 @@ import java.util.Map;
                 """)
 public class CsvSource implements Source {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CsvSource.class);
+
     private ShardedLineReader reader;
     private String delimiter;
     private String quoteMode;
@@ -62,7 +64,7 @@ public class CsvSource implements Source {
         boolean hasHeader = Params.bool(params, "hasHeader", true);
         this.batchSize = Params.integer(params, "batchSize", 5000);
         this.quoteMode = Params.str(params, "quoteMode", "auto");
-        long resumeOffset = Params.integer(params, "resumeOffset", 0);
+        long resumeOffset = Params.longVal(params, "resumeOffset", 0L); // 字节偏移可能超 int 范围
         int shardIndex = Params.integer(params, "shardIndex", 0);
         int totalShards = Params.integer(params, "totalShards", 1);
 
@@ -85,7 +87,11 @@ public class CsvSource implements Source {
             // 0 号分片的字节区间包含表头：从分片流中消费首行作为列名，不作为数据行
             String line = reader.readLine();
             if (line == null) {
-                throw new IllegalArgumentException("CSV 文件为空: " + path);
+                // 空文件（0 字节）：优雅 EOF（0 行 STOPPED），不当错误处理
+                log.info("CSV 文件为空（0 字节），按 0 行处理: {}", path);
+                this.header = new String[0];
+                this.eof = true;
+                return;
             }
             this.header = split(line);
         } else if (hasHeader) {
@@ -107,7 +113,7 @@ public class CsvSource implements Source {
                     new BufferedInputStream(fis), new ShardUtils.ByteRange(0, file.length()));
             String line = headReader.readLine();
             if (line == null) {
-                throw new IllegalArgumentException("CSV 文件为空: " + file);
+                return new String[0]; // 空文件：无表头，分片读取必然 EOF
             }
             return split(line);
         }

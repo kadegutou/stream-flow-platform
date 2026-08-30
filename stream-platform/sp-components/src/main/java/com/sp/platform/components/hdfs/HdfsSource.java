@@ -77,7 +77,10 @@ public class HdfsSource implements Source {
         if (hasHeader && shardIndex == 0) {
             String line = reader.readLine();
             if (line == null) {
-                throw new IllegalArgumentException("HDFS 文件为空: " + path);
+                // 空文件（0 字节）：优雅 EOF（0 行 STOPPED）
+                this.header = new String[0];
+                this.eof = true;
+                return;
             }
             this.header = split(line);
         } else if (hasHeader) {
@@ -87,9 +90,10 @@ public class HdfsSource implements Source {
                         headIn, new ShardUtils.ByteRange(0, size));
                 String line = headReader.readLine();
                 if (line == null) {
-                    throw new IllegalArgumentException("HDFS 文件为空: " + path);
+                    this.header = new String[0]; // 空文件：读取必然 EOF
+                } else {
+                    this.header = split(line);
                 }
-                this.header = split(line);
             }
         }
     }
