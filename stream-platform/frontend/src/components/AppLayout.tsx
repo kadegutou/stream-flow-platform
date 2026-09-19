@@ -1,4 +1,4 @@
-import { Layout, Menu, Dropdown, Avatar, Space, message, Breadcrumb } from 'antd';
+import { Layout, Menu, Dropdown, Avatar, Space, message, Breadcrumb, Spin } from 'antd';
 import {
   AppstoreOutlined,
   UnorderedListOutlined,
@@ -12,7 +12,7 @@ import {
   ThunderboltFilled,
 } from '@ant-design/icons';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { useAuthStore } from '../store/auth';
 import { useThemeStore } from '../store/theme';
 
@@ -223,9 +223,17 @@ export default function AppLayout() {
           </Space>
         </Header>
         <Content className="sp-content" style={{ margin: 16 }}>
-          {/* key 随路由变化 → 每次切页重放入场动画 */}
+          {/* key 随路由变化 → 每次切页重放入场动画；Suspense 只替换内容区，布局不闪 */}
           <div key={location.pathname} className="sp-page-enter">
-            <Outlet />
+            <Suspense
+              fallback={
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
+                  <Spin size="large" />
+                </div>
+              }
+            >
+              <Outlet />
+            </Suspense>
           </div>
         </Content>
       </Layout>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Card, Form, Input, InputNumber, message, Modal, Popconfirm, Space, Table } from 'antd';
-import { PlusOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { Button, Card, Dropdown, Form, Input, InputNumber, message, Modal, Popconfirm, Space, Table } from 'antd';
+import { DownloadOutlined, PlusOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { createJob, deleteJob, listJobs, offlineJob, onlineJob } from '../api/jobs';
@@ -8,6 +8,7 @@ import type { Job } from '../types';
 import { StatusTag } from '../components/StatusTag';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
+import { JOB_TEMPLATES, type JobTemplate } from '../constants/jobTemplates';
 
 export default function Jobs() {
   const navigate = useNavigate();
@@ -44,6 +45,26 @@ export default function Jobs() {
     } catch (e) {
       const err = e as { response?: { data?: { error?: string } } };
       message.error(err.response?.data?.error || '创建失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** 一键载入示例模板：直接带 DAG 创建作业，省去现场编排 */
+  const onLoadTemplate = async (tpl: JobTemplate) => {
+    setSaving(true);
+    try {
+      await createJob({
+        name: tpl.name,
+        description: tpl.description,
+        parallelism: tpl.parallelism,
+        dag: tpl.dag,
+      });
+      message.success(`已载入「${tpl.name}」，可直接上线或进画布调整参数`);
+      load();
+    } catch (e) {
+      const err = e as { response?: { data?: { error?: string } } };
+      message.error(err.response?.data?.error || '载入示例失败');
     } finally {
       setSaving(false);
     }
@@ -86,24 +107,49 @@ export default function Jobs() {
         title="作业管理"
         subtitle="拖拽编排数据流作业，一键上线持续处理"
         extra={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              form.resetFields();
-              form.setFieldsValue({ parallelism: 1 });
-              setModalOpen(true);
-            }}
-          >
-            新建作业
-          </Button>
+          <Space>
+            <Dropdown
+              trigger={['click']}
+              menu={{
+                items: JOB_TEMPLATES.map((t) => ({
+                  key: t.key,
+                  label: (
+                    <div style={{ maxWidth: 340, padding: '2px 0' }}>
+                      <div style={{ fontWeight: 600 }}>{t.name}</div>
+                      <div style={{ fontSize: 12, opacity: 0.65, marginTop: 2 }}>{t.flow}</div>
+                    </div>
+                  ),
+                  onClick: () => onLoadTemplate(t),
+                })),
+              }}
+            >
+              <Button icon={<DownloadOutlined />} loading={saving}>
+                载入示例
+              </Button>
+            </Dropdown>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                form.resetFields();
+                form.setFieldsValue({ parallelism: 1 });
+                setModalOpen(true);
+              }}
+            >
+              新建作业
+            </Button>
+          </Space>
         }
       />
       <Table<Job>
         rowKey="id"
         loading={loading}
         dataSource={data}
-        locale={{ emptyText: <EmptyState description="还没有作业，点击右上角「新建作业」开始编排" /> }}
+        locale={{
+          emptyText: (
+            <EmptyState description="还没有作业：点右上角「新建作业」从零编排，或用「载入示例」一键体验完整链路" />
+          ),
+        }}
         rowClassName={(_, i) => (i % 2 === 1 ? 'sp-table-row-striped' : '')}
         columns={[
           { title: 'ID', dataIndex: 'id', width: 70 },

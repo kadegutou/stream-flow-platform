@@ -1,16 +1,18 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { Component, useEffect, type ErrorInfo, type ReactNode } from 'react';
+import { Component, lazy, useEffect, type ErrorInfo, type ReactNode } from 'react';
 import { ConfigProvider, theme as antdTheme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import AppLayout from './components/AppLayout';
 import Login from './pages/Login';
-import Jobs from './pages/Jobs';
-import JobEditor from './pages/JobEditor';
-import Components from './pages/Components';
-import Users from './pages/Users';
-import Monitor from './pages/Monitor';
 import { useAuthStore } from './store/auth';
 import { useThemeStore } from './store/theme';
+
+// 路由级懒加载：登录页与整体框架先加载，业务页面按需拉取（首屏更小更快）
+const Jobs = lazy(() => import('./pages/Jobs'));
+const JobEditor = lazy(() => import('./pages/JobEditor'));
+const Components = lazy(() => import('./pages/Components'));
+const Users = lazy(() => import('./pages/Users'));
+const Monitor = lazy(() => import('./pages/Monitor'));
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const token = useAuthStore((s) => s.token);

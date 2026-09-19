@@ -19,13 +19,13 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button, Drawer, Form, Input, InputNumber, message, Select, Space, Switch, Typography } from 'antd';
-import { ArrowLeftOutlined, DeleteOutlined, ExportOutlined, ImportOutlined, LayoutOutlined, LeftOutlined, NodeExpandOutlined, RightOutlined, SaveOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, DeleteOutlined, ExportOutlined, ImportOutlined, LayoutOutlined, LeftOutlined, NodeExpandOutlined, RedoOutlined, RightOutlined, SaveOutlined, UndoOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useThemeStore } from '../store/theme';
 import { listComponents } from '../api/components';
 import { getJob, updateJob } from '../api/jobs';
 import type { ComponentCategory, ComponentDef, Dag, Job, ParamSchema } from '../types';
-import { CATEGORY_LABEL } from '../components/CategoryTag';
+import { CATEGORY_HEX, CATEGORY_LABEL } from '../components/CategoryTag';
 
 /* ---------- 画布节点数据 ---------- */
 
@@ -38,12 +38,6 @@ interface ComponentNodeData extends Record<string, unknown> {
 }
 
 type ComponentFlowNode = Node<ComponentNodeData, 'component'>;
-
-const CATEGORY_HEX: Record<ComponentCategory, string> = {
-  SOURCE: '#52c41a',
-  PROCESS: '#2f54eb',
-  SINK: '#fa8c16',
-};
 
 const CATEGORY_BG: Record<ComponentCategory, string> = {
   SOURCE: '#f6ffed',
@@ -279,11 +273,82 @@ function FlowCanvas() {
         // 有内容时做一次分层布局，让加载出来的图更整齐
         setNodes(flowNodes.length > 0 ? layeredLayout(flowNodes, flowEdges) : flowNodes);
         setEdges(flowEdges);
+        // 加载完成，此后画布变更才计入撤销历史（加载出的 DAG 即历史起点）
+        loadedRef.current = true;
       } catch {
         message.error('加载作业失败');
       }
     })();
   }, [id]);
+
+  /* ---------- 撤销 / 重做 ---------- */
+
+  /** 历史快照栈（nodes + edges）。防抖入栈，拖动/连线的中间态不记录 */
+  const historyRef = useRef<{ nodes: ComponentFlowNode[]; edges: Edge[] }[]>([]);
+  const historyIndexRef = useRef(-1);
+  const loadedRef = useRef(false); // DAG 加载完成前不记历史，避免把空画布当成可撤销的初始态
+  const [historyTick, setHistoryTick] = useState(0); // 驱动按钮可用态刷新
+
+  // nodes/edges 稳定 500ms 后记一次快照；与当前指针快照相同则跳过（撤销/重做自身触发的变化）
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    const timer = setTimeout(() => {
+      const snapshot = {
+        nodes: nodes.map((n) => ({ ...n, position: { ...n.position }, data: { ...n.data } })),
+        edges: edges.map((e) => ({ ...e })),
+      };
+      const stack = historyRef.current;
+      const cur = stack[historyIndexRef.current];
+      if (cur && JSON.stringify(cur) === JSON.stringify(snapshot)) return;
+      stack.splice(historyIndexRef.current + 1); // 产生新分支时丢弃重做栈
+      stack.push(snapshot);
+      if (stack.length > 60) stack.shift(); // 上限 60 步，防内存增长
+      historyIndexRef.current = stack.length - 1;
+      setHistoryTick((v) => v + 1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [nodes, edges]);
+
+  const applySnapshot = useCallback((index: number) => {
+    const snap = historyRef.current[index];
+    if (!snap) return;
+    historyIndexRef.current = index;
+    setNodes(snap.nodes);
+    setEdges(snap.edges);
+    setSelectedNodeId(null);
+    setHistoryTick((v) => v + 1);
+  }, []);
+
+  const undo = useCallback(() => applySnapshot(historyIndexRef.current - 1), [applySnapshot]);
+  const redo = useCallback(() => applySnapshot(historyIndexRef.current + 1), [applySnapshot]);
+
+  // 历史栈存在 ref 里（避免每次入栈都重建回调），用 historyTick 驱动按钮可用态重算
+  const { canUndo, canRedo } = useMemo(
+    () => ({
+      canUndo: historyIndexRef.current > 0,
+      canRedo: historyIndexRef.current < historyRef.current.length - 1,
+    }),
+    [historyTick],
+  );
+
+  // Ctrl/Cmd+Z 撤销，Ctrl+Shift+Z 或 Ctrl+Y 重做（输入框内不拦截，交给浏览器原生撤销）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((k === 'z' && e.shiftKey) || k === 'y') {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange<ComponentFlowNode>[]) =>
@@ -463,6 +528,18 @@ function FlowCanvas() {
           </Typography.Text>
         </Space>
         <Space>
+          <Button
+            icon={<UndoOutlined />}
+            onClick={undo}
+            disabled={!canUndo}
+            title="撤销（Ctrl+Z）"
+          />
+          <Button
+            icon={<RedoOutlined />}
+            onClick={redo}
+            disabled={!canRedo}
+            title="重做（Ctrl+Shift+Z / Ctrl+Y）"
+          />
           <Button icon={<LayoutOutlined />} onClick={onAutoLayout}>
             自动布局
           </Button>
