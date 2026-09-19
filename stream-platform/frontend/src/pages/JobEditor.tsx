@@ -19,7 +19,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button, Drawer, Form, Input, InputNumber, message, Select, Space, Switch, Typography } from 'antd';
-import { ArrowLeftOutlined, DeleteOutlined, ExportOutlined, ImportOutlined, LayoutOutlined, NodeExpandOutlined, SaveOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, DeleteOutlined, ExportOutlined, ImportOutlined, LayoutOutlined, LeftOutlined, NodeExpandOutlined, RightOutlined, SaveOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useThemeStore } from '../store/theme';
 import { listComponents } from '../api/components';
@@ -515,12 +515,12 @@ function FlowCanvas() {
                         padding: '6px 8px',
                         margin: '6px 0',
                         cursor: 'grab',
-                        background: '#fafafa',
+                        background: dark ? '#1b2334' : '#fafafa',
                         fontSize: 13,
                       }}
                     >
                       {comp.name}
-                      <div style={{ fontSize: 11, color: '#999' }}>{comp.code}</div>
+                      <div style={{ fontSize: 11, color: dark ? '#7d8899' : '#999' }}>{comp.code}</div>
                     </div>
                   ))}
                 </div>
@@ -534,27 +534,31 @@ function FlowCanvas() {
           {panelHover && (
             <div
               onClick={() => setPanelCollapsed(!panelCollapsed)}
+              title={panelCollapsed ? '展开控件栏' : '收起控件栏'}
               style={{
                 position: 'absolute',
                 top: '50%',
-                right: -30,
+                right: -16,
                 transform: 'translateY(-50%)',
-                width: 42,
-                height: 94,
-                borderRadius: '0 47px 47px 0',
-                background: 'rgba(255,255,255,.5)',
+                width: 26,
+                height: 60,
+                borderRadius: '0 26px 26px 0',
+                background: dark ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.92)',
+                border: `1px solid ${dark ? 'rgba(255,255,255,.16)' : 'rgba(20,30,48,.1)'}`,
+                borderLeft: 'none',
+                boxShadow: dark ? 'none' : '0 2px 8px rgba(20,30,48,.12)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
                 zIndex: 20,
-                color: '#555',
-                fontSize: 32,
-                fontWeight: 700,
+                color: dark ? 'rgba(255,255,255,.75)' : '#5a6072',
+                fontSize: 11,
                 userSelect: 'none',
+                transition: 'background .2s, color .2s',
               }}
             >
-              {panelCollapsed ? '»' : '«'}
+              {panelCollapsed ? <RightOutlined /> : <LeftOutlined />}
             </div>
           )}
         </div>

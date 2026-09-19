@@ -1,4 +1,4 @@
-import { Layout, Menu, Dropdown, Avatar, Space, message } from 'antd';
+import { Layout, Menu, Dropdown, Avatar, Space, message, Breadcrumb } from 'antd';
 import {
   AppstoreOutlined,
   UnorderedListOutlined,
@@ -7,6 +7,9 @@ import {
   LogoutOutlined,
   MoonOutlined,
   SunOutlined,
+  LeftOutlined,
+  RightOutlined,
+  ThunderboltFilled,
 } from '@ant-design/icons';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useMemo, useState } from 'react';
@@ -41,6 +44,26 @@ export default function AppLayout() {
     ? '/jobs'
     : visibleMenuItems.find((m) => location.pathname.startsWith(m.key))?.key ?? '/jobs';
 
+  // Header 左侧面包屑：编辑器页显示「作业管理 / 编辑画布」，其余显示当前页名
+  const isEditor = /^\/jobs\/\d+\/editor/.test(location.pathname);
+  const currentLabel =
+    menuItems.find((m) => location.pathname.startsWith(m.key))?.label ?? '作业管理';
+  const breadcrumbItems = isEditor
+    ? [
+        {
+          title: (
+            <span
+              onClick={() => navigate('/jobs')}
+              style={{ cursor: 'pointer', color: 'inherit' }}
+            >
+              作业管理
+            </span>
+          ),
+        },
+        { title: '编辑画布' },
+      ]
+    : [{ title: currentLabel }];
+
   const handleLogout = () => {
     logout();
     message.success('已退出登录');
@@ -50,27 +73,32 @@ export default function AppLayout() {
   const collapseBtn = (
     <div
       onClick={() => setCollapsed(!collapsed)}
+      title={collapsed ? '展开导航栏' : '收起导航栏'}
       style={{
         position: 'absolute',
         top: '50%',
-        right: -30,
+        right: -16,
         transform: 'translateY(-50%)',
-        width: 42,
-        height: 94,
-        borderRadius: '0 47px 47px 0',
-        background: 'rgba(255,255,255,.5)',
+        width: 26,
+        height: 60,
+        borderRadius: '0 26px 26px 0',
+        // 底色随明暗模式适配：暗色下用低透明白，浅色下用悬浮白 + 描边
+        background: dark ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.92)',
+        border: `1px solid ${dark ? 'rgba(255,255,255,.16)' : 'rgba(20,30,48,.1)'}`,
+        borderLeft: 'none',
+        boxShadow: dark ? 'none' : '0 2px 8px rgba(20,30,48,.12)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
         zIndex: 20,
-        color: '#555',
-        fontSize: 32,
-        fontWeight: 700,
+        color: dark ? 'rgba(255,255,255,.75)' : '#5a6072',
+        fontSize: 11,
         userSelect: 'none',
+        transition: 'background .2s, color .2s',
       }}
     >
-      {collapsed ? '»' : '«'}
+      {collapsed ? <RightOutlined /> : <LeftOutlined />}
     </div>
   );
 
@@ -87,7 +115,21 @@ export default function AppLayout() {
         onMouseLeave={() => setSiderHover(false)}
         style={{ position: 'relative', zIndex: 10 }}
       >
-        <Sider theme="dark" collapsed={collapsed} collapsedWidth={16} width={200} trigger={null} style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <Sider
+          theme="dark"
+          collapsed={collapsed}
+          collapsedWidth={16}
+          width={200}
+          trigger={null}
+          style={{
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            // 与登录页同一套深蓝渐变，保证进入系统后的视觉连贯
+            background: 'linear-gradient(180deg, #141e30 0%, #243b55 100%)',
+            boxShadow: '2px 0 12px rgba(20,30,48,.18)',
+          }}
+        >
           {!collapsed && (
             <div
               style={{
@@ -96,11 +138,33 @@ export default function AppLayout() {
                 fontSize: 15,
                 padding: '18px 16px',
                 lineHeight: 1.4,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
               }}
             >
-              通用流处理
-              <br />
-              任务管理平台
+              {/* 品牌标记：与登录页深蓝渐变呼应 */}
+              <span
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  background: 'linear-gradient(135deg, #2f54eb 0%, #5b8cff 100%)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 15,
+                  flexShrink: 0,
+                  boxShadow: '0 3px 10px rgba(47,84,235,.45)',
+                }}
+              >
+                <ThunderboltFilled />
+              </span>
+              <span>
+                通用流处理
+                <br />
+                任务管理平台
+              </span>
             </div>
           )}
           <Menu
@@ -121,11 +185,14 @@ export default function AppLayout() {
             background: dark ? '#141b2b' : '#fff',
             padding: '0 24px',
             display: 'flex',
-            justifyContent: 'flex-end',
+            justifyContent: 'space-between',
             alignItems: 'center',
             boxShadow: '0 1px 4px rgba(0,21,41,.08)',
+            borderBottom: `1px solid ${dark ? 'rgba(255,255,255,.06)' : 'rgba(20,30,48,.06)'}`,
           }}
         >
+          {/* 左侧：当前位置（原为空白，进系统后缺少方位感） */}
+          <Breadcrumb items={breadcrumbItems} style={{ fontSize: 13 }} />
           <Space size={20}>
             {/* 明暗主题切换 */}
             <span
@@ -155,8 +222,11 @@ export default function AppLayout() {
             </Dropdown>
           </Space>
         </Header>
-        <Content style={{ margin: 16 }}>
-          <Outlet />
+        <Content className="sp-content" style={{ margin: 16 }}>
+          {/* key 随路由变化 → 每次切页重放入场动画 */}
+          <div key={location.pathname} className="sp-page-enter">
+            <Outlet />
+          </div>
         </Content>
       </Layout>
     </Layout>

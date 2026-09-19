@@ -8,6 +8,8 @@ import type { JobInstance, JobMetric } from '../types';
 import { StatusTag } from '../components/StatusTag';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
+import { AnimatedNumber } from '../components/AnimatedNumber';
+import { useThemeStore } from '../store/theme';
 
 /** 渐变指标卡（监控大盘风格） */
 function MetricCard({
@@ -48,38 +50,64 @@ function MetricCard({
           lineHeight: 1.2,
         }}
       >
-        {typeof value === 'number' ? value.toLocaleString() : value}
+        {typeof value === 'number' ? <AnimatedNumber value={value} /> : value}
         {suffix && <span style={{ fontSize: 13, fontWeight: 400, marginLeft: 6, opacity: 0.85 }}>{suffix}</span>}
       </div>
     </div>
   );
 }
 
-/** 简单 SVG 迷你折线图（不引重型图表库） */
+/** 简单 SVG 迷你折线图（不引重型图表库）：渐变面积填充 + 明暗自适应 */
 function MiniLineChart({ data, width = 560, height = 160 }: { data: number[]; width?: number; height?: number }) {
+  const dark = useThemeStore((s) => s.dark);
   if (data.length === 0) {
     return <Typography.Text type="secondary">暂无采样数据</Typography.Text>;
   }
   const max = Math.max(...data, 1);
-  const padding = 8;
+  const padding = 16;
   const stepX = data.length > 1 ? (width - padding * 2) / (data.length - 1) : 0;
-  const points = data
-    .map((v, i) => `${padding + i * stepX},${height - padding - (v / max) * (height - padding * 2)}`)
-    .join(' ');
+  const yOf = (v: number) => height - padding - (v / max) * (height - padding * 2);
+  const pts = data.map((v, i) => [padding + i * stepX, yOf(v)] as const);
+  const points = pts.map(([x, y]) => `${x},${y}`).join(' ');
+  // 折线下方围出的面积，用于渐变填充
+  const lastX = pts.length > 1 ? pts[pts.length - 1][0] : padding;
+  const areaPath = `M ${padding},${height - padding} L ${points.replace(/ /g, ' L ')} L ${lastX},${height - padding} Z`;
+
+  const line = dark ? '#5b8cff' : '#2f54eb';
+  const axis = dark ? 'rgba(255,255,255,.07)' : 'rgba(20,30,48,.07)';
+  const label = dark ? '#8b96ad' : '#98a0b0';
+
   return (
-    <svg width={width} height={height} style={{ background: '#fafafa', borderRadius: 8 }}>
-      <polyline points={points} fill="none" stroke="#1677ff" strokeWidth={2} />
-      {data.map((v, i) => (
-        <circle
-          key={i}
-          cx={padding + i * stepX}
-          cy={height - padding - (v / max) * (height - padding * 2)}
-          r={3}
-          fill="#1677ff"
+    <svg
+      width={width}
+      height={height}
+      style={{ background: dark ? '#161d2e' : '#fafbfd', borderRadius: 10, display: 'block' }}
+    >
+      <defs>
+        <linearGradient id="sp-chart-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={line} stopOpacity={dark ? 0.35 : 0.22} />
+          <stop offset="100%" stopColor={line} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      {/* 三条水平参考线 */}
+      {[0.25, 0.5, 0.75].map((r) => (
+        <line
+          key={r}
+          x1={padding}
+          x2={width - padding}
+          y1={padding + r * (height - padding * 2)}
+          y2={padding + r * (height - padding * 2)}
+          stroke={axis}
+          strokeDasharray="3 5"
         />
       ))}
-      <text x={padding} y={padding + 8} fontSize={11} fill="#999">
-        峰值 {max} 行/s
+      <path d={areaPath} fill="url(#sp-chart-fill)" stroke="none" />
+      <polyline points={points} fill="none" stroke={line} strokeWidth={2} strokeLinejoin="round" />
+      {pts.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={3} fill={line} stroke={dark ? '#161d2e' : '#fff'} strokeWidth={1.5} />
+      ))}
+      <text x={padding} y={padding - 4} fontSize={11} fill={label}>
+        峰值 {max.toLocaleString()} 行/s
       </text>
     </svg>
   );

@@ -3,6 +3,10 @@
 body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* 统一字体栈：Windows/Mac/答辩现场机器渲染一致 */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
 }
 
 /* 表格斑马纹（配合 rowClassName 使用） */
@@ -34,7 +38,100 @@ html[data-sp-dark='true'] .sp-table-row-striped > td {
   background: transparent;
 }
 
+/* 暗色模式滚动条 */
+html[data-sp-dark='true'] ::-webkit-scrollbar-thumb {
+  background: #2f3a52;
+}
+html[data-sp-dark='true'] ::-webkit-scrollbar-thumb:hover {
+  background: #3e4c69;
+}
+
 /* React Flow 连线流动动画的虚线颜色微调 */
 .react-flow__edge-path {
   stroke-linecap: round;
+}
+
+/* ---------- 内容区层次 ---------- */
+
+/* 内容区：顶部极淡光晕，避免大片纯灰显得平 */
+.sp-content {
+  background-image: radial-gradient(
+    ellipse 70% 40% at 50% -8%,
+    rgba(47, 84, 235, 0.055),
+    transparent 70%
+  );
+}
+
+/* 卡片：柔和分层投影，替代 antd 默认的硬边框 */
+.sp-content .ant-card {
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgba(20, 30, 48, 0.04), 0 4px 16px rgba(20, 30, 48, 0.06);
+}
+html[data-sp-dark='true'] .sp-content .ant-card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.24), 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+
+/* 卡片悬停微抬升（仅表格外的信息卡，避免表格行悬停时抖动） */
+.sp-content .ant-card:hover {
+  box-shadow: 0 2px 4px rgba(20, 30, 48, 0.06), 0 8px 24px rgba(20, 30, 48, 0.09);
+  transition: box-shadow 0.25s ease;
+}
+
+/* ---------- 页面切换动效 ---------- */
+
+@keyframes sp-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sp-page-enter {
+  animation: sp-page-in 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* ---------- 运行中状态脉冲圆点 ---------- */
+
+@keyframes sp-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(82, 196, 26, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(82, 196, 26, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(82, 196, 26, 0);
+  }
+}
+
+.sp-pulse-dot {
+  animation: sp-pulse 1.8s infinite;
+}
+
+/* ---------- 登录页流动背景（呼应「流处理」主题） ---------- */
+
+@keyframes sp-flow {
+  from {
+    stroke-dashoffset: 640;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.sp-flow-line {
+  animation: sp-flow linear infinite;
+}
+
+/* 尊重系统的「减少动态效果」设置 */
+@media (prefers-reduced-motion: reduce) {
+  .sp-page-enter,
+  .sp-pulse-dot,
+  .sp-flow-line {
+    animation: none;
+  }
 }

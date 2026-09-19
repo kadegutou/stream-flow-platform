@@ -62,6 +62,10 @@ export default function App() {
           colorPrimary: '#2f54eb',
           borderRadius: 8,
           colorBgLayout: dark ? '#0f1420' : '#f3f5f9',
+          // 统一字体栈：避免不同机器（Windows/Mac/答辩现场）字体跳变
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", ' +
+            '"Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif',
         },
         components: {
           Table: {
@@ -70,6 +74,16 @@ export default function App() {
             rowHoverBg: dark ? '#1d2942' : '#eef3ff',
           },
           Card: { paddingLG: 20 },
+          // 侧边栏背景由 AppLayout 以渐变自定义，Menu 透明以透出底色
+          Menu: {
+            darkItemBg: 'transparent',
+            darkSubMenuItemBg: 'transparent',
+            darkItemSelectedBg: 'rgba(47,84,235,.95)',
+            darkItemHoverBg: 'rgba(255,255,255,.09)',
+            darkItemColor: 'rgba(255,255,255,.72)',
+            darkItemSelectedColor: '#fff',
+            itemMarginInline: 10,
+          },
         },
       }}
     >
