@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Card, Col, Collapse, message, Row, Typography } from 'antd';
+import { Card, Col, Collapse, Row, Typography } from 'antd';
 import { AppstoreOutlined } from '@ant-design/icons';
 import { listComponents } from '../api/components';
+import { showApiError } from '../api/request';
 import type { ComponentDef, ComponentCategory } from '../types';
 import { CategoryTag, CATEGORY_LABEL } from '../components/CategoryTag';
 import { PageHeader } from '../components/PageHeader';
@@ -17,7 +18,7 @@ export default function Components() {
     setLoading(true);
     listComponents()
       .then(setData)
-      .catch(() => message.error('加载控件列表失败'))
+      .catch((e) => showApiError(e, '加载控件列表失败'))
       .finally(() => setLoading(false));
   }, []);
 

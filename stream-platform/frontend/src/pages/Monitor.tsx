@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Card, Drawer, message, Space, Table, Typography } from 'antd';
+import { Button, Card, Drawer, Space, Table, Typography } from 'antd';
 import { ReloadOutlined, RiseOutlined, DatabaseOutlined, ClockCircleOutlined, MonitorOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { listJobs } from '../api/jobs';
 import { getInstanceMetrics, listJobInstances } from '../api/instances';
+import { showApiError } from '../api/request';
 import type { JobInstance, JobMetric } from '../types';
 import { StatusTag } from '../components/StatusTag';
 import { PageHeader } from '../components/PageHeader';
@@ -142,8 +143,8 @@ export default function Monitor() {
       all.sort((a, b) => b.id - a.id);
       setInstances(all);
       setLastUpdated(new Date());
-    } catch {
-      message.error('加载运行实例失败');
+    } catch (e) {
+      showApiError(e, '加载运行实例失败');
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -170,8 +171,8 @@ export default function Monitor() {
       try {
         const data = await getInstanceMetrics(metricsInstance.id);
         if (!cancelled) setMetrics(data);
-      } catch {
-        if (!cancelled) message.error('加载吞吐采样失败');
+      } catch (e) {
+        if (!cancelled) showApiError(e, '加载吞吐采样失败');
       } finally {
         if (!cancelled) setMetricsLoading(false);
       }

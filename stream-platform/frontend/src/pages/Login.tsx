@@ -10,6 +10,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { login } from '../api/auth';
+import { showApiError } from '../api/request';
 import { useAuthStore } from '../store/auth';
 
 const FEATURES = [
@@ -76,8 +77,8 @@ export default function Login() {
       setAuth(res.token, res.nickname, res.role);
       message.success(`欢迎，${res.nickname}`);
       navigate('/jobs', { replace: true });
-    } catch {
-      message.error('登录失败，请检查用户名或密码');
+    } catch (e) {
+      showApiError(e, '登录失败，请检查用户名或密码');
     } finally {
       setLoading(false);
     }

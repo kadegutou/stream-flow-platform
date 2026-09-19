@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button, Card, Form, Input, message, Modal, Popconfirm, Select, Space, Table, Tag } from 'antd';
 import { PlusOutlined, UserOutlined } from '@ant-design/icons';
 import { createUser, deleteUser, listUsers, updateUser, type UserPayload } from '../api/users';
+import { showApiError } from '../api/request';
 import type { User } from '../types';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
@@ -18,8 +19,8 @@ export default function Users() {
     setLoading(true);
     try {
       setData(await listUsers());
-    } catch {
-      message.error('加载用户列表失败');
+    } catch (e) {
+      showApiError(e, '加载用户列表失败');
     } finally {
       setLoading(false);
     }
@@ -61,8 +62,8 @@ export default function Users() {
       }
       setModalOpen(false);
       load();
-    } catch {
-      message.error(editing ? '更新失败' : '创建失败');
+    } catch (e) {
+      showApiError(e, editing ? '更新失败' : '创建失败');
     } finally {
       setSaving(false);
     }
@@ -73,8 +74,8 @@ export default function Users() {
       await deleteUser(id);
       message.success('已删除');
       load();
-    } catch {
-      message.error('删除失败');
+    } catch (e) {
+      showApiError(e, '删除失败');
     }
   };
 

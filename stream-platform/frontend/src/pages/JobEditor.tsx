@@ -25,6 +25,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useThemeStore } from '../store/theme';
 import { listComponents } from '../api/components';
 import { getJob, updateJob } from '../api/jobs';
+import { showApiError } from '../api/request';
 import type { ComponentCategory, ComponentDef, Dag, Job, ParamSchema } from '../types';
 import { CATEGORY_HEX, CATEGORY_LABEL } from '../components/CategoryTag';
 
@@ -314,8 +315,8 @@ function FlowCanvas() {
         setEdges(flowEdges);
         // 加载完成，此后画布变更才计入撤销历史（加载出的 DAG 即历史起点）
         loadedRef.current = true;
-      } catch {
-        message.error('加载作业失败');
+      } catch (e) {
+        showApiError(e, '加载作业失败');
       }
     })();
   }, [id]);
@@ -583,8 +584,7 @@ function FlowCanvas() {
       setJob(updated);
       message.success(`已保存（版本 v${updated.version}）`);
     } catch (e) {
-      const err = e as { response?: { data?: { error?: string } } };
-      message.error(err.response?.data?.error || '保存失败');
+      showApiError(e, '保存失败');
     } finally {
       setSaving(false);
     }

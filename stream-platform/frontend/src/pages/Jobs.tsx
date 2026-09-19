@@ -4,6 +4,7 @@ import { DownloadOutlined, PlusOutlined, SearchOutlined, UnorderedListOutlined }
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { createJob, deleteJob, listJobs, offlineJob, onlineJob } from '../api/jobs';
+import { showApiError } from '../api/request';
 import type { Job } from '../types';
 import { StatusTag } from '../components/StatusTag';
 import { PageHeader } from '../components/PageHeader';
@@ -37,8 +38,8 @@ export default function Jobs() {
     setLoading(true);
     try {
       setData(await listJobs());
-    } catch {
-      message.error('加载作业列表失败');
+    } catch (e) {
+      showApiError(e, '加载作业列表失败');
     } finally {
       setLoading(false);
     }
@@ -58,8 +59,7 @@ export default function Jobs() {
       setModalOpen(false);
       load();
     } catch (e) {
-      const err = e as { response?: { data?: { error?: string } } };
-      message.error(err.response?.data?.error || '创建失败');
+      showApiError(e, '创建失败');
     } finally {
       setSaving(false);
     }
@@ -78,8 +78,7 @@ export default function Jobs() {
       message.success(`已载入「${tpl.name}」，可直接上线或进画布调整参数`);
       load();
     } catch (e) {
-      const err = e as { response?: { data?: { error?: string } } };
-      message.error(err.response?.data?.error || '载入示例失败');
+      showApiError(e, '载入示例失败');
     } finally {
       setSaving(false);
     }
@@ -90,8 +89,8 @@ export default function Jobs() {
       await deleteJob(id);
       message.success('已删除');
       load();
-    } catch {
-      message.error('删除失败');
+    } catch (e) {
+      showApiError(e, '删除失败');
     }
   };
 
@@ -100,8 +99,8 @@ export default function Jobs() {
       await onlineJob(id);
       message.success('已发起上线');
       load();
-    } catch {
-      message.error('上线失败');
+    } catch (e) {
+      showApiError(e, '上线失败');
     }
   };
 
@@ -110,8 +109,8 @@ export default function Jobs() {
       await offlineJob(id);
       message.success('已发起下线');
       load();
-    } catch {
-      message.error('下线失败');
+    } catch (e) {
+      showApiError(e, '下线失败');
     }
   };
 
