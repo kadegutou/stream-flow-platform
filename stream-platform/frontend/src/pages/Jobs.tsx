@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Card, Form, Input, InputNumber, message, Modal, Popconfirm, Space, Table } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { createJob, deleteJob, listJobs, offlineJob, onlineJob } from '../api/jobs';
 import type { Job } from '../types';
 import { StatusTag } from '../components/StatusTag';
+import { PageHeader } from '../components/PageHeader';
+import { EmptyState } from '../components/EmptyState';
 
 export default function Jobs() {
   const navigate = useNavigate();
@@ -78,26 +80,31 @@ export default function Jobs() {
   };
 
   return (
-    <Card
-      title="作业管理"
-      extra={
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            form.resetFields();
-            form.setFieldsValue({ parallelism: 1 });
-            setModalOpen(true);
-          }}
-        >
-          新建作业
-        </Button>
-      }
-    >
+    <Card styles={{ body: { paddingTop: 16 } }}>
+      <PageHeader
+        icon={<UnorderedListOutlined />}
+        title="作业管理"
+        subtitle="拖拽编排数据流作业，一键上线持续处理"
+        extra={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              form.resetFields();
+              form.setFieldsValue({ parallelism: 1 });
+              setModalOpen(true);
+            }}
+          >
+            新建作业
+          </Button>
+        }
+      />
       <Table<Job>
         rowKey="id"
         loading={loading}
         dataSource={data}
+        locale={{ emptyText: <EmptyState description="还没有作业，点击右上角「新建作业」开始编排" /> }}
+        rowClassName={(_, i) => (i % 2 === 1 ? 'sp-table-row-striped' : '')}
         columns={[
           { title: 'ID', dataIndex: 'id', width: 70 },
           { title: '名称', dataIndex: 'name' },

@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Card, Col, Collapse, Empty, message, Row, Typography } from 'antd';
+import { Card, Col, Collapse, message, Row, Typography } from 'antd';
+import { AppstoreOutlined } from '@ant-design/icons';
 import { listComponents } from '../api/components';
 import type { ComponentDef, ComponentCategory } from '../types';
 import { CategoryTag, CATEGORY_LABEL } from '../components/CategoryTag';
+import { PageHeader } from '../components/PageHeader';
+import { EmptyState } from '../components/EmptyState';
 
 const CATEGORY_ORDER: ComponentCategory[] = ['SOURCE', 'PROCESS', 'SINK'];
 
@@ -24,8 +27,13 @@ export default function Components() {
   }));
 
   return (
-    <Card title="控件列表" loading={loading}>
-      {!loading && data.length === 0 && <Empty description="暂无控件" />}
+    <Card loading={loading} styles={{ body: { paddingTop: 16 } }}>
+      <PageHeader
+        icon={<AppstoreOutlined />}
+        title="控件列表"
+        subtitle="20 个内置控件，统一 SPI 接口，参数由 JSON Schema 动态渲染"
+      />
+      {!loading && data.length === 0 && <EmptyState description="暂无控件" />}
       {grouped.map(
         (group) =>
           group.items.length > 0 && (

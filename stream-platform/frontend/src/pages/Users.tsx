@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Card, Form, Input, message, Modal, Popconfirm, Select, Space, Table, Tag } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined, UserOutlined } from '@ant-design/icons';
 import { createUser, deleteUser, listUsers, updateUser, type UserPayload } from '../api/users';
 import type { User } from '../types';
+import { PageHeader } from '../components/PageHeader';
+import { EmptyState } from '../components/EmptyState';
 
 export default function Users() {
   const [data, setData] = useState<User[]>([]);
@@ -77,18 +79,23 @@ export default function Users() {
   };
 
   return (
-    <Card
-      title="用户管理"
-      extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-          新增用户
-        </Button>
-      }
-    >
+    <Card styles={{ body: { paddingTop: 16 } }}>
+      <PageHeader
+        icon={<UserOutlined />}
+        title="用户管理"
+        subtitle="平台账号与角色权限（仅管理员可见）"
+        extra={
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            新增用户
+          </Button>
+        }
+      />
       <Table<User>
         rowKey="id"
         loading={loading}
         dataSource={data}
+        locale={{ emptyText: <EmptyState description="暂无用户" /> }}
+        rowClassName={(_, i) => (i % 2 === 1 ? 'sp-table-row-striped' : '')}
         columns={[
           { title: 'ID', dataIndex: 'id', width: 70 },
           { title: '用户名', dataIndex: 'username' },

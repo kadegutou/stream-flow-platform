@@ -1,0 +1,40 @@
+/* 全局样式：表格斑马纹、滚动条、细节质感 */
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 表格斑马纹（配合 rowClassName 使用） */
+.sp-table-row-striped > td {
+  background: #fafbfd !important;
+}
+
+/* 暗色模式下的斑马纹与全局底色 */
+html[data-sp-dark='true'] body {
+  background: #0f1420;
+}
+html[data-sp-dark='true'] .sp-table-row-striped > td {
+  background: #161d2e !important;
+}
+
+/* 细滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #c9d2e3;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a8b6d0;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* React Flow 连线流动动画的虚线颜色微调 */
+.react-flow__edge-path {
+  stroke-linecap: round;
+}

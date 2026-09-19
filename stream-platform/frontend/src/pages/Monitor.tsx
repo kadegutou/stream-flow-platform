@@ -1,11 +1,59 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Card, Drawer, message, Space, Statistic, Table, Typography } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { Button, Card, Drawer, message, Table, Typography } from 'antd';
+import { ReloadOutlined, RiseOutlined, DatabaseOutlined, ClockCircleOutlined, MonitorOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { listJobs } from '../api/jobs';
 import { getInstanceMetrics, listJobInstances } from '../api/instances';
 import type { JobInstance, JobMetric } from '../types';
 import { StatusTag } from '../components/StatusTag';
+import { PageHeader } from '../components/PageHeader';
+import { EmptyState } from '../components/EmptyState';
+
+/** 渐变指标卡（监控大盘风格） */
+function MetricCard({
+  title,
+  value,
+  suffix,
+  icon,
+  gradient,
+}: {
+  title: string;
+  value: string | number;
+  suffix?: string;
+  icon: React.ReactNode;
+  gradient: string;
+}) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        minWidth: 160,
+        borderRadius: 12,
+        padding: '16px 20px',
+        background: gradient,
+        color: '#fff',
+        boxShadow: '0 4px 14px rgba(31,45,61,.14)',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 12, opacity: 0.85 }}>{title}</span>
+        <span style={{ fontSize: 18, opacity: 0.85 }}>{icon}</span>
+      </div>
+      <div
+        style={{
+          marginTop: 8,
+          fontSize: 28,
+          fontWeight: 700,
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          lineHeight: 1.2,
+        }}
+      >
+        {typeof value === 'number' ? value.toLocaleString() : value}
+        {suffix && <span style={{ fontSize: 13, fontWeight: 400, marginLeft: 6, opacity: 0.85 }}>{suffix}</span>}
+      </div>
+    </div>
+  );
+}
 
 /** 简单 SVG 迷你折线图（不引重型图表库） */
 function MiniLineChart({ data, width = 560, height = 160 }: { data: number[]; width?: number; height?: number }) {
@@ -109,19 +157,24 @@ export default function Monitor() {
   const latestMetric = metrics.length > 0 ? metrics[metrics.length - 1] : null;
 
   return (
-    <Card
-      title="运行监控"
-      extra={
-        <Button icon={<ReloadOutlined />} onClick={() => load(true)}>
-          刷新
-        </Button>
-      }
-    >
+    <Card styles={{ body: { paddingTop: 16 } }}>
+      <PageHeader
+        icon={<MonitorOutlined />}
+        title="运行监控"
+        subtitle="作业实例状态与实时吞吐，每 5 秒自动刷新"
+        extra={
+          <Button icon={<ReloadOutlined />} onClick={() => load(true)}>
+            刷新
+          </Button>
+        }
+      />
       <Table<JobInstance>
         rowKey="id"
         loading={loading}
         dataSource={instances}
         pagination={{ pageSize: 10 }}
+        locale={{ emptyText: <EmptyState description="暂无运行实例，到「作业管理」上线一个作业试试" /> }}
+        rowClassName={(_, i) => (i % 2 === 1 ? 'sp-table-row-striped' : '')}
         columns={[
           { title: '实例ID', dataIndex: 'id', width: 90 },
           { title: '作业名', dataIndex: 'jobName' },
@@ -168,14 +221,27 @@ export default function Monitor() {
         onClose={() => setMetricsOpen(false)}
         width={640}
       >
-        <Space size="large" style={{ marginBottom: 16 }}>
-          <Statistic title="当前吞吐" value={latestMetric?.rowsPerSec ?? 0} suffix="行/s" />
-          <Statistic title="累计行数" value={latestMetric?.totalRows ?? metricsInstance?.totalRows ?? 0} />
-          <Statistic
+        <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+          <MetricCard
+            title="当前吞吐"
+            value={latestMetric?.rowsPerSec ?? 0}
+            suffix="行/s"
+            icon={<RiseOutlined />}
+            gradient="linear-gradient(135deg, #2f54eb 0%, #5b8cff 100%)"
+          />
+          <MetricCard
+            title="累计行数"
+            value={latestMetric?.totalRows ?? metricsInstance?.totalRows ?? 0}
+            icon={<DatabaseOutlined />}
+            gradient="linear-gradient(135deg, #389e0d 0%, #6fce62 100%)"
+          />
+          <MetricCard
             title="最近采样"
             value={latestMetric ? dayjs(latestMetric.sampledAt).format('HH:mm:ss') : '-'}
+            icon={<ClockCircleOutlined />}
+            gradient="linear-gradient(135deg, #d46b08 0%, #ffa940 100%)"
           />
-        </Space>
+        </div>
         <MiniLineChart data={metrics.map((m) => m.rowsPerSec)} />
         <Table<JobMetric>
           style={{ marginTop: 16 }}
