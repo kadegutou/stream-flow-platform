@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Card, Drawer, message, Table, Typography } from 'antd';
+import { Button, Card, Drawer, message, Space, Table, Typography } from 'antd';
 import { ReloadOutlined, RiseOutlined, DatabaseOutlined, ClockCircleOutlined, MonitorOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { listJobs } from '../api/jobs';
@@ -116,6 +116,7 @@ function MiniLineChart({ data, width = 560, height = 160 }: { data: number[]; wi
 export default function Monitor() {
   const [instances, setInstances] = useState<JobInstance[]>([]);
   const [loading, setLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [metricsOpen, setMetricsOpen] = useState(false);
   const [metricsInstance, setMetricsInstance] = useState<JobInstance | null>(null);
   const [metrics, setMetrics] = useState<JobMetric[]>([]);
@@ -140,6 +141,7 @@ export default function Monitor() {
       const all = results.flat();
       all.sort((a, b) => b.id - a.id);
       setInstances(all);
+      setLastUpdated(new Date());
     } catch {
       message.error('加载运行实例失败');
     } finally {
@@ -191,9 +193,16 @@ export default function Monitor() {
         title="运行监控"
         subtitle="作业实例状态与实时吞吐，每 5 秒自动刷新"
         extra={
-          <Button icon={<ReloadOutlined />} onClick={() => load(true)}>
-            刷新
-          </Button>
+          <Space>
+            {lastUpdated && (
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                最后更新 {dayjs(lastUpdated).format('HH:mm:ss')}（5s 自动刷新）
+              </Typography.Text>
+            )}
+            <Button icon={<ReloadOutlined />} onClick={() => load(true)}>
+              刷新
+            </Button>
+          </Space>
         }
       />
       <Table<JobInstance>

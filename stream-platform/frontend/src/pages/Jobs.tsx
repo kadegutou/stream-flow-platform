@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Button, Card, Dropdown, Form, Input, InputNumber, message, Modal, Popconfirm, Space, Table } from 'antd';
-import { DownloadOutlined, PlusOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Button, Card, Dropdown, Form, Input, InputNumber, message, Modal, Popconfirm, Segmented, Space, Table } from 'antd';
+import { DownloadOutlined, PlusOutlined, SearchOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { createJob, deleteJob, listJobs, offlineJob, onlineJob } from '../api/jobs';
@@ -16,7 +16,22 @@ export default function Jobs() {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [keyword, setKeyword] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [form] = Form.useForm<{ name: string; description?: string; parallelism: number }>();
+
+  // 搜索 + 状态筛选
+  const filtered = useMemo(() => {
+    const kw = keyword.trim().toLowerCase();
+    return data.filter((j) => {
+      if (kw && !j.name.toLowerCase().includes(kw) && !(j.description ?? '').toLowerCase().includes(kw)) {
+        return false;
+      }
+      if (statusFilter === 'ALL') return true;
+      if (statusFilter === 'NONE') return !j.runningStatus;
+      return j.runningStatus === statusFilter;
+    });
+  }, [data, keyword, statusFilter]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -141,10 +156,31 @@ export default function Jobs() {
           </Space>
         }
       />
+      <Space style={{ marginBottom: 12 }} wrap>
+        <Input
+          allowClear
+          prefix={<SearchOutlined style={{ color: '#b6bdd0' }} />}
+          placeholder="搜索作业名称 / 描述"
+          style={{ width: 240 }}
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+        />
+        <Segmented
+          value={statusFilter}
+          onChange={(v) => setStatusFilter(v as string)}
+          options={[
+            { value: 'ALL', label: '全部' },
+            { value: 'RUNNING', label: '运行中' },
+            { value: 'STOPPED', label: '已停止' },
+            { value: 'FAILED', label: '失败' },
+            { value: 'NONE', label: '未上线' },
+          ]}
+        />
+      </Space>
       <Table<Job>
         rowKey="id"
         loading={loading}
-        dataSource={data}
+        dataSource={filtered}
         locale={{
           emptyText: (
             <EmptyState description="还没有作业：点右上角「新建作业」从零编排，或用「载入示例」一键体验完整链路" />

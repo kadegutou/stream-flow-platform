@@ -4,6 +4,7 @@ import {
   ReactFlowProvider,
   Background,
   Controls,
+  MiniMap,
   addEdge,
   applyEdgeChanges,
   applyNodeChanges,
@@ -18,8 +19,8 @@ import {
   type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Button, Drawer, Form, Input, InputNumber, message, Select, Space, Switch, Typography } from 'antd';
-import { ArrowLeftOutlined, DeleteOutlined, ExportOutlined, ImportOutlined, LayoutOutlined, LeftOutlined, NodeExpandOutlined, RedoOutlined, RightOutlined, SaveOutlined, UndoOutlined } from '@ant-design/icons';
+import { Button, Drawer, Form, Input, InputNumber, message, Modal, Select, Space, Switch, Tour, Typography } from 'antd';
+import { ArrowLeftOutlined, CheckCircleFilled, DeleteOutlined, ExclamationCircleFilled, ExportOutlined, ImportOutlined, LayoutOutlined, LeftOutlined, NodeExpandOutlined, QuestionCircleOutlined, RedoOutlined, RightOutlined, SaveOutlined, UndoOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useThemeStore } from '../store/theme';
 import { listComponents } from '../api/components';
@@ -89,7 +90,18 @@ function ComponentNode(props: NodeProps<ComponentFlowNode>) {
       >
         {CATEGORY_ICON[data.category]}
       </div>
-      <div style={{ padding: '8px 12px', flex: 1 }}>
+      <div style={{ padding: '8px 12px', flex: 1, position: 'relative' }}>
+        {/* 参数配置状态角标：必填已配齐=绿勾，未配齐=橙叹号 */}
+        <span
+          title={isNodeConfigured(data) ? '参数已配置' : '有待填的必填参数'}
+          style={{ position: 'absolute', top: 6, right: 8, fontSize: 12, lineHeight: 1 }}
+        >
+          {isNodeConfigured(data) ? (
+            <CheckCircleFilled style={{ color: '#52c41a' }} />
+          ) : (
+            <ExclamationCircleFilled style={{ color: '#fa8c16' }} />
+          )}
+        </span>
         <div style={{ fontSize: 10, color, fontWeight: 700, letterSpacing: 0.5 }}>
           {data.category} · {CATEGORY_LABEL[data.category]}
         </div>
@@ -102,6 +114,18 @@ function ComponentNode(props: NodeProps<ComponentFlowNode>) {
 }
 
 const nodeTypes = { component: ComponentNode };
+
+/** 判断节点必填参数是否已配置完整 */
+function isNodeConfigured(data: ComponentNodeData): boolean {
+  const required = data.schema?.required ?? [];
+  if (required.length === 0) return true;
+  return required.every((key) => {
+    const v = data.params[key];
+    if (v === undefined || v === null || v === '') return false;
+    if (Array.isArray(v) && v.length === 0) return false;
+    return true;
+  });
+}
 
 /** 连线样式：平滑贝塞尔 + 流动虚线动画 */
 const FLOW_EDGE_STYLE = {
@@ -224,10 +248,25 @@ function FlowCanvas() {
   const [draggingNode, setDraggingNode] = useState(false);
   const [trashActive, setTrashActive] = useState(false);
   const [shatter, setShatter] = useState<{ x: number; y: number; color: string } | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
   const nodeSeq = useRef(1);
   const trashRef = useRef<HTMLDivElement>(null);
   const canvasWrapRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const saveBtnRef = useRef<HTMLButtonElement>(null);
   const [paramForm] = Form.useForm();
+
+  // 首次进入画布：自动弹出四步引导（localStorage 记忆）
+  useEffect(() => {
+    if (localStorage.getItem('sp-editor-tour-done') !== '1') {
+      const t = setTimeout(() => setTourOpen(true), 600);
+      return () => clearTimeout(t);
+    }
+  }, []);
+  const closeTour = () => {
+    setTourOpen(false);
+    localStorage.setItem('sp-editor-tour-done', '1');
+  };
 
   const componentMap = useMemo(() => {
     const map = new Map<string, ComponentDef>();
@@ -462,9 +501,69 @@ function FlowCanvas() {
     );
   };
 
+  // 保存前本地预检：结构 + 必填参数，问题逐条列出
+  const validateDag = (): string[] => {
+    const problems: string[] = [];
+    if (nodes.length === 0) {
+      problems.push('画布为空：请至少拖入一个输入控件和一个输出控件');
+      return problems;
+    }
+    const sources = nodes.filter((n) => n.data.category === 'SOURCE');
+    const sinks = nodes.filter((n) => n.data.category === 'SINK');
+    if (sources.length === 0) problems.push('缺少输入控件（SOURCE）');
+    if (sinks.length === 0) problems.push('缺少输出控件（SINK）');
+
+    // 孤立节点（无任何连线）
+    const connected = new Set<string>();
+    edges.forEach((e) => {
+      connected.add(e.source);
+      connected.add(e.target);
+    });
+    nodes.forEach((n) => {
+      if (!connected.has(n.id) && nodes.length > 1) {
+        problems.push(`「${n.data.name}」未连线`);
+      }
+    });
+
+    // 输入控件不应有入边、输出控件不应有出边
+    edges.forEach((e) => {
+      const from = nodes.find((n) => n.id === e.source);
+      const to = nodes.find((n) => n.id === e.target);
+      if (from?.data.category === 'SINK') problems.push(`输出控件「${from.data.name}」不能再连出`);
+      if (to?.data.category === 'SOURCE') problems.push(`输入控件「${to.data.name}」不能有输入连线`);
+    });
+
+    // 必填参数缺失
+    nodes.forEach((n) => {
+      if (!isNodeConfigured(n.data)) {
+        const missing = (n.data.schema?.required ?? []).filter((key) => {
+          const v = n.data.params[key];
+          return v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
+        });
+        problems.push(`「${n.data.name}」缺少必填参数：${missing.join('、')}`);
+      }
+    });
+    return [...new Set(problems)];
+  };
+
   // 保存 DAG
   const onSave = async () => {
     if (!job) return;
+    const problems = validateDag();
+    if (problems.length > 0) {
+      Modal.warning({
+        title: '作业还不能保存',
+        content: (
+          <ul style={{ paddingLeft: 18, margin: '8px 0 0' }}>
+            {problems.map((p) => (
+              <li key={p} style={{ marginBottom: 4 }}>{p}</li>
+            ))}
+          </ul>
+        ),
+        okText: '去修改',
+      });
+      return;
+    }
     const dag: Dag = {
       nodes: nodes.map((n) => ({
         id: n.id,
@@ -543,15 +642,21 @@ function FlowCanvas() {
           <Button icon={<LayoutOutlined />} onClick={onAutoLayout}>
             自动布局
           </Button>
-          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onSave}>
+          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onSave} ref={saveBtnRef}>
             保存
           </Button>
+          <Button
+            icon={<QuestionCircleOutlined />}
+            title="操作引导"
+            onClick={() => setTourOpen(true)}
+          />
         </Space>
       </div>
 
       <div style={{ display: 'flex', flex: 1, gap: 8, minHeight: 0 }}>
         {/* 左侧控件面板（可折叠；折叠后留触发条） */}
         <div
+          ref={panelRef}
           onMouseMove={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
             const nearRight = rect.right - e.clientX <= 40;
@@ -671,6 +776,14 @@ function FlowCanvas() {
           >
             <Background gap={16} color={dark ? '#232c42' : '#e8ebf2'} />
             <Controls />
+            <MiniMap
+              nodeColor={(n) => CATEGORY_HEX[(n.data as ComponentNodeData).category] ?? '#9aa4b8'}
+              maskColor={dark ? 'rgba(15,20,32,.72)' : 'rgba(243,245,249,.72)'}
+              bgColor={dark ? '#141b2b' : '#fff'}
+              style={{ borderRadius: 8 }}
+              pannable
+              zoomable
+            />
           </ReactFlow>
           {/* 垃圾桶：仅在拖动画布节点时浮现；节点悬停其上时放大变红 */}
           {draggingNode && (
@@ -734,6 +847,35 @@ function FlowCanvas() {
             })}
         </div>
       </div>
+
+      {/* 首次使用引导 */}
+      <Tour
+        open={tourOpen}
+        onClose={closeTour}
+        onFinish={closeTour}
+        steps={[
+          {
+            title: '① 拖入控件',
+            description: '从左侧控件面板把「输入 / 处理 / 输出」控件拖进画布。',
+            target: () => panelRef.current!,
+          },
+          {
+            title: '② 连线成流',
+            description: '从节点右侧圆点拖出连线，接到下一个节点左侧圆点，组成数据流。',
+            target: () => canvasWrapRef.current!,
+          },
+          {
+            title: '③ 配置参数',
+            description: '点击节点，在右侧抽屉里按表单填参数；节点右上角的角标会提示必填项是否已配齐。',
+            target: () => canvasWrapRef.current!,
+          },
+          {
+            title: '④ 保存上线',
+            description: '保存时会自动校验 DAG 合法性；通过后回作业列表点「上线」即可运行。',
+            target: () => saveBtnRef.current!,
+          },
+        ]}
+      />
 
       {/* 参数抽屉 */}
       <Drawer
