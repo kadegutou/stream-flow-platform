@@ -113,7 +113,7 @@ export default function AppLayout() {
           setSiderHover(nearRight && nearMiddle);
         }}
         onMouseLeave={() => setSiderHover(false)}
-        style={{ position: 'relative', zIndex: 10 }}
+        style={{ position: 'relative', zIndex: 10, display: 'flex', alignSelf: 'stretch' }}
       >
         <Sider
           theme="dark"
@@ -122,7 +122,8 @@ export default function AppLayout() {
           width={200}
           trigger={null}
           style={{
-            height: '100vh',
+            height: 'auto',
+            minHeight: '100vh',
             display: 'flex',
             flexDirection: 'column',
             // 与登录页同一套深蓝渐变，保证进入系统后的视觉连贯

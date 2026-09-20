@@ -9,6 +9,44 @@ body {
     'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
 }
 
+/* 登录页输入框：深色玻璃拟态下的强制适配（覆盖 affixWrapper 内层 input 背景）
+   常态与聚焦态背景统一，避免点击后长方形颜色跳变 */
+.sp-login-page .ant-input-affix-wrapper,
+.sp-login-page .ant-input-affix-wrapper:hover,
+.sp-login-page .ant-input-affix-wrapper-focused,
+.sp-login-page .ant-input-affix-wrapper:focus,
+.sp-login-page .ant-input-affix-wrapper:focus-within,
+.sp-login-page .ant-input-affix-wrapper > input.ant-input,
+.sp-login-page .ant-input,
+.sp-login-page .ant-input:hover,
+.sp-login-page .ant-input:focus,
+.sp-login-page .ant-input-focused {
+  background: rgba(122, 165, 255, 0.10) !important;
+  color: #e8ecf5 !important;
+  caret-color: #ffffff;
+  box-shadow: none !important;
+}
+.sp-login-page .ant-input-affix-wrapper > input.ant-input,
+.sp-login-page .ant-input-password .ant-input {
+  background: transparent !important;
+}
+.sp-login-page .ant-input::placeholder,
+.sp-login-page .ant-input-affix-wrapper input::placeholder {
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+.sp-login-page .ant-input-password .ant-input {
+  background: transparent !important;
+}
+/* 浏览器自动填充时的白底黄字修正 */
+.sp-login-page input:-webkit-autofill,
+.sp-login-page input:-webkit-autofill:hover,
+.sp-login-page input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #e8ecf5;
+  -webkit-box-shadow: 0 0 0 1000px rgba(30, 42, 66, 0.9) inset;
+  transition: background-color 9999s ease-in-out 0s;
+  caret-color: #ffffff;
+}
+
 /* 表格斑马纹（配合 rowClassName 使用） */
 .sp-table-row-striped > td {
   background: #fafbfd !important;

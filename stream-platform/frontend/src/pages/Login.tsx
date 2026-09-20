@@ -1,4 +1,4 @@
-import { Button, Card, Form, Input, message } from 'antd';
+import { Button, Card, ConfigProvider, Form, Input, message, theme as antdTheme } from 'antd';
 import {
   LockOutlined,
   UserOutlined,
@@ -86,6 +86,7 @@ export default function Login() {
 
   return (
     <div
+      className="sp-login-page"
       style={{
         position: 'relative',
         minHeight: '100vh',
@@ -185,21 +186,38 @@ export default function Login() {
           </div>
         </div>
 
-        {/* 右侧登录卡：玻璃拟态，透出背景流动线条 */}
+        {/* 右侧登录卡：深色玻璃拟态，与背景同色系；固定深色不随全局主题切换 */}
+        <ConfigProvider
+          theme={{
+            algorithm: antdTheme.darkAlgorithm,
+            token: { colorPrimary: '#5b8cff', borderRadius: 8 },
+            components: {
+              Input: {
+                colorBgContainer: 'rgba(255,255,255,.08)',
+                colorBorder: 'rgba(122,165,255,.28)',
+                colorText: '#e8ecf5',
+                colorTextPlaceholder: 'rgba(255,255,255,.35)',
+                colorIcon: 'rgba(255,255,255,.45)',
+                activeBorderColor: '#5b8cff',
+                hoverBorderColor: '#5b8cff',
+              },
+            },
+          }}
+        >
         <Card
           style={{
             width: 380,
             borderRadius: 16,
-            background: 'rgba(255,255,255,.96)',
-            backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255,255,255,.6)',
-            boxShadow: '0 20px 56px rgba(0,0,0,.4)',
+            background: 'rgba(20,30,48,.55)',
+            backdropFilter: 'blur(14px)',
+            border: '1px solid rgba(122,165,255,.22)',
+            boxShadow: '0 20px 56px rgba(0,0,0,.45)',
           }}
           styles={{ body: { padding: '28px 28px 24px' } }}
         >
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#1f2d3d' }}>欢迎登录</div>
-            <div style={{ fontSize: 12, color: '#98a0b0', marginTop: 4 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#e8ecf5' }}>欢迎登录</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', marginTop: 4 }}>
               Stream Processing Platform
             </div>
           </div>
@@ -230,6 +248,7 @@ export default function Login() {
             </Form.Item>
           </Form>
         </Card>
+        </ConfigProvider>
       </div>
     </div>
   );

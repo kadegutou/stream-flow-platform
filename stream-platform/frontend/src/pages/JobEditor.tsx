@@ -773,6 +773,8 @@ function FlowCanvas() {
             onNodeDragStop={onNodeDragStop}
             fitView
             deleteKeyCode={['Backspace', 'Delete']}
+            proOptions={{ hideAttribution: true }}
+            colorMode={dark ? 'dark' : 'light'}
           >
             <Background gap={16} color={dark ? '#232c42' : '#e8ebf2'} />
             <Controls />
