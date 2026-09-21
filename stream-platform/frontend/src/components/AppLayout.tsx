@@ -66,9 +66,11 @@ export default function AppLayout() {
     : [{ title: currentLabel }];
 
   const handleLogout = () => {
-    logout();
-    message.success('已退出登录');
-    transitionLogout();
+    // 先播转场，黑幕盖住后再清登录态，避免页面先跳到登录页
+    transitionLogout(() => {
+      logout();
+      message.success('已退出登录');
+    });
   };
 
   const collapseBtn = (

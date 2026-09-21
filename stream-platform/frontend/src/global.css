@@ -158,6 +158,95 @@ html:not([data-sp-dark='true']) .sp-route-transition.sp-rt-logout > i {
   background: linear-gradient(180deg, #8b2a2a, #c04545);
 }
 
+/* 登录进度条 */
+.sp-rt-progress {
+  position: absolute;
+  z-index: 4;
+  bottom: 18vh;
+  left: clamp(250px, 26vw, 480px);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.sp-rt-progress-bar {
+  width: clamp(280px, 30vw, 480px);
+  height: 3px;
+  background: rgba(122, 165, 255, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.sp-rt-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2f54eb, #5b8cff, #7aa5ff);
+  border-radius: 2px;
+  transition: width 0.1s linear;
+  box-shadow: 0 0 8px rgba(91, 140, 255, 0.4);
+}
+.sp-rt-progress-pct {
+  color: #7d8899;
+  font: 700 13px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 1px;
+  min-width: 42px;
+}
+/* 浅色模式进度条 */
+html:not([data-sp-dark='true']) .sp-rt-progress-bar {
+  background: rgba(47, 84, 235, 0.12);
+}
+html:not([data-sp-dark='true']) .sp-rt-progress-fill {
+  background: linear-gradient(90deg, #2f54eb, #5b8cff);
+  box-shadow: 0 0 6px rgba(47, 84, 235, 0.3);
+}
+html:not([data-sp-dark='true']) .sp-rt-progress-pct {
+  color: #98a0b0;
+}
+
+/* 终端日志区 */
+.sp-rt-logs {
+  position: absolute;
+  z-index: 4;
+  bottom: 8vh;
+  left: clamp(250px, 26vw, 480px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sp-rt-log-line {
+  color: #5b8cff;
+  font: 400 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.5px;
+  opacity: 0;
+  animation: spRtLogIn 0.25s ease-out both;
+}
+.sp-rt-log-line:last-child {
+  color: #7aa5ff;
+  font-weight: 700;
+}
+/* 退出日志用暗红色 */
+.sp-rt-logout .sp-rt-log-line {
+  color: #c04545;
+}
+.sp-rt-logout .sp-rt-log-line:last-child {
+  color: #d06060;
+}
+/* 浅色模式日志 */
+html:not([data-sp-dark='true']) .sp-rt-log-line {
+  color: #2f54eb;
+}
+html:not([data-sp-dark='true']) .sp-rt-log-line:last-child {
+  color: #1f3db8;
+}
+html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-log-line {
+  color: #a03535;
+}
+html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-log-line:last-child {
+  color: #8b2a2a;
+}
+
+@keyframes spRtLogIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
 /* 登录页输入框：深色玻璃拟态下的强制适配（覆盖 affixWrapper 内层 input 背景）
    常态与聚焦态背景统一，避免点击后长方形颜色跳变 */
 .sp-login-page .ant-input-affix-wrapper,
