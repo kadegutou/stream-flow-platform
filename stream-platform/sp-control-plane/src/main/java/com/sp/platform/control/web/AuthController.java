@@ -40,4 +40,31 @@ public class AuthController {
                 "nickname", user.getNickname() == null ? user.getUsername() : user.getNickname(),
                 "role", user.getRole());
     }
+
+    /** POST /api/auth/register {username,password,nickname} → {token,nickname,role} */
+    @PostMapping("/register")
+    public Map<String, Object> register(@RequestBody Map<String, Object> body) {
+        String username = String.valueOf(body.getOrDefault("username", "")).trim();
+        String password = String.valueOf(body.getOrDefault("password", ""));
+        String nickname = String.valueOf(body.getOrDefault("nickname", "")).trim();
+        if (username.isEmpty() || password.isEmpty()) {
+            throw ApiExceptionHandler.ApiException.badRequest("用户名和密码不能为空");
+        }
+        if (username.length() > 64) {
+            throw ApiExceptionHandler.ApiException.badRequest("用户名过长");
+        }
+        if (userRepo.findByUsername(username).isPresent()) {
+            throw ApiExceptionHandler.ApiException.conflict("用户名已存在");
+        }
+        SysUser u = new SysUser();
+        u.setUsername(username);
+        u.setPasswordHash(encoder.encode(password));
+        u.setNickname(nickname.isEmpty() ? username : nickname);
+        u.setRole("USER");
+        userRepo.save(u);
+        return Map.of(
+                "token", jwtService.issue(u.getId(), u.getUsername(), u.getRole()),
+                "nickname", u.getNickname(),
+                "role", u.getRole());
+    }
 }

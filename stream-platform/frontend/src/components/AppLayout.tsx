@@ -16,7 +16,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { useRouteTransition } from './RouteTransition';
 import { Suspense, useMemo, useState } from 'react';
 import { useAuthStore } from '../store/auth';
-import { useThemeStore } from '../store/theme';
+import { useThemeStore, useFontScaleStore } from '../store/theme';
 
 const { Sider, Header, Content } = Layout;
 
@@ -34,6 +34,7 @@ export default function AppLayout() {
   const location = useLocation();
   const { nickname, role, logout } = useAuthStore();
   const { dark, toggle } = useThemeStore();
+  const { scale, increase, decrease } = useFontScaleStore();
   const [collapsed, setCollapsed] = useState(false);
   const [siderHover, setSiderHover] = useState(false);
 
@@ -200,6 +201,52 @@ export default function AppLayout() {
           {/* 左侧：当前位置（原为空白，进系统后缺少方位感） */}
           <Breadcrumb items={breadcrumbItems} style={{ fontSize: 13 }} />
           <Space size={20}>
+            {/* 字体缩放 */}
+            <Space size={4}>
+              <span
+                onClick={decrease}
+                title="缩小字体"
+                style={{
+                  cursor: scale <= 0.85 ? 'not-allowed' : 'pointer',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: dark ? (scale <= 0.85 ? '#444' : '#d5dbea') : (scale <= 0.85 ? '#ccc' : '#5a6072'),
+                  userSelect: 'none',
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  transition: 'color .2s',
+                }}
+              >
+                A-
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: dark ? '#666' : '#999',
+                  minWidth: 32,
+                  textAlign: 'center',
+                  userSelect: 'none',
+                }}
+              >
+                {Math.round(scale * 100)}%
+              </span>
+              <span
+                onClick={increase}
+                title="放大字体"
+                style={{
+                  cursor: scale >= 1.3 ? 'not-allowed' : 'pointer',
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: dark ? (scale >= 1.3 ? '#444' : '#d5dbea') : (scale >= 1.3 ? '#ccc' : '#5a6072'),
+                  userSelect: 'none',
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  transition: 'color .2s',
+                }}
+              >
+                A+
+              </span>
+            </Space>
             {/* 明暗主题切换 */}
             <span
               onClick={toggle}

@@ -9,7 +9,7 @@ import {
 } from '@ant-design/icons';
 import { useRouteTransition } from '../components/RouteTransition';
 import { useState } from 'react';
-import { login } from '../api/auth';
+import { login, register } from '../api/auth';
 import { showApiError } from '../api/request';
 import { useAuthStore } from '../store/auth';
 
@@ -69,6 +69,7 @@ export default function Login() {
   const { transitionLogin } = useRouteTransition();
   const setAuth = useAuthStore((s) => s.setAuth);
   const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<'login' | 'register'>('login');
 
   const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true);
@@ -78,6 +79,19 @@ export default function Login() {
       transitionLogin('/home', () => message.success(`欢迎，${res.nickname}`));
     } catch (e) {
       showApiError(e, '登录失败，请检查用户名或密码');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRegister = async (values: { username: string; password: string; nickname: string }) => {
+    setLoading(true);
+    try {
+      const res = await register(values);
+      setAuth(res.token, res.nickname, res.role);
+      transitionLogin('/home', () => message.success(`注册成功，欢迎，${res.nickname}`));
+    } catch (e) {
+      showApiError(e, '注册失败');
     } finally {
       setLoading(false);
     }
@@ -215,11 +229,41 @@ export default function Login() {
           styles={{ body: { padding: '28px 28px 24px' } }}
         >
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#e8ecf5' }}>欢迎登录</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#e8ecf5' }}>
+              {tab === 'login' ? '欢迎登录' : '注册账号'}
+            </div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', marginTop: 4 }}>
               Stream Processing Platform
             </div>
           </div>
+          {/* 登录/注册切换 */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 24,
+              marginBottom: 20,
+            }}
+          >
+            {(['login', 'register'] as const).map((t) => (
+              <span
+                key={t}
+                onClick={() => setTab(t)}
+                style={{
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: tab === t ? 700 : 400,
+                  color: tab === t ? '#5b8cff' : 'rgba(255,255,255,.45)',
+                  borderBottom: tab === t ? '2px solid #5b8cff' : '2px solid transparent',
+                  paddingBottom: 4,
+                  transition: 'all 0.25s',
+                }}
+              >
+                {t === 'login' ? '登录' : '注册'}
+              </span>
+            ))}
+          </div>
+          {tab === 'login' ? (
           <Form onFinish={onFinish} size="large">
             <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]}>
               <Input prefix={<UserOutlined />} placeholder="用户名" autoComplete="username" />
@@ -246,6 +290,37 @@ export default function Login() {
               </Button>
             </Form.Item>
           </Form>
+          ) : (
+          <Form onFinish={onRegister} size="large">
+            <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]}>
+              <Input prefix={<UserOutlined />} placeholder="用户名" autoComplete="username" />
+            </Form.Item>
+            <Form.Item name="nickname" rules={[{ required: true, message: '请输入昵称' }]}>
+              <Input prefix={<UserOutlined />} placeholder="昵称" />
+            </Form.Item>
+            <Form.Item name="password" rules={[{ required: true, message: '请输入密码' }]}>
+              <Input.Password prefix={<LockOutlined />} placeholder="密码" autoComplete="new-password" />
+            </Form.Item>
+            <Form.Item style={{ marginBottom: 0 }}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                block
+                loading={loading}
+                style={{
+                  height: 44,
+                  fontWeight: 600,
+                  letterSpacing: 4,
+                  background: 'linear-gradient(135deg, #2f54eb 0%, #5b8cff 100%)',
+                  border: 'none',
+                  boxShadow: '0 6px 18px rgba(47,84,235,.35)',
+                }}
+              >
+                注 册
+              </Button>
+            </Form.Item>
+          </Form>
+          )}
         </Card>
         </ConfigProvider>
       </div>
