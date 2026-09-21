@@ -9,6 +9,7 @@ import { useThemeStore } from './store/theme';
 import { RouteTransitionProvider } from './components/RouteTransition';
 
 // 路由级懒加载：登录页与整体框架先加载，业务页面按需拉取（首屏更小更快）
+const Home = lazy(() => import('./pages/Home'));
 const Jobs = lazy(() => import('./pages/Jobs'));
 const JobEditor = lazy(() => import('./pages/JobEditor'));
 const Components = lazy(() => import('./pages/Components'));
@@ -102,7 +103,8 @@ export default function App() {
               </RequireAuth>
             }
           >
-            <Route index element={<Navigate to="/jobs" replace />} />
+            <Route index element={<Navigate to="/home" replace />} />
+            <Route path="home" element={<Home />} />
             <Route path="jobs" element={<Jobs />} />
             <Route path="jobs/:id/editor" element={<JobEditor />} />
             <Route path="components" element={<Components />} />

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 /** 路由标题映射（转场时显示） */
 const ROUTE_TITLES: Record<string, { no: string; title: string; sub: string }> = {
+  '/home': { no: '00', title: '首页', sub: 'DASHBOARD' },
   '/jobs': { no: '01', title: '作业管理', sub: 'JOB ORCHESTRATION' },
   '/components': { no: '02', title: '控件列表', sub: 'COMPONENT REGISTRY' },
   '/users': { no: '03', title: '用户管理', sub: 'USER ADMINISTRATION' },
@@ -27,9 +28,10 @@ interface TransitionState {
 
 interface TransitionCtx {
   transitionTo: (path: string, opts?: { replace?: boolean }) => void;
-  transitionLogin: (path?: string) => void;
-  /** 退出登录转场，onCovered 在黑幕扫入完成后回调（用于延迟清除登录态） */
-  transitionLogout: (onCovered?: () => void) => void;
+  /** 登录转场，onComplete 在黑幕扫出完成后回调 */
+  transitionLogin: (path?: string, onComplete?: () => void) => void;
+  /** 退出登录转场，onCovered 在黑幕扫入完成后回调，onComplete 在扫出完成后回调 */
+  transitionLogout: (onCovered?: () => void, onComplete?: () => void) => void;
 }
 
 const Ctx = createContext<TransitionCtx>(null!);
@@ -108,7 +110,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
 
   /** 登录转场：扫入 → 进度条0→100% + 日志 → 跳转 → 扫出 */
   const runLogin = useCallback(
-    (target: string) => {
+    (target: string, onComplete?: () => void) => {
       clearAll();
       setInfo({ kind: 'login', no: 'SYS', title: '系统初始化', sub: 'BOOT / AUTHENTICATION VERIFIED' });
       setPhase('leaving');
@@ -144,6 +146,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
                       setInfo(null);
                       setProgress(0);
                       setLogLines([]);
+                      onComplete?.();
                     }, REVEAL_MS),
                   );
                 }, 300),
@@ -157,8 +160,8 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     [navigate],
   );
 
-  /** 退出转场：扫入 → 日志逐行 → 跳转 → 扫出。onCovered 在黑幕扫入完成后回调 */
-  const runLogout = useCallback((onCovered?: () => void) => {
+  /** 退出转场：扫入 → 日志逐行 → 跳转 → 扫出 */
+  const runLogout = useCallback((onCovered?: () => void, onComplete?: () => void) => {
     clearAll();
     setInfo({ kind: 'logout', no: 'SYS', title: '会话终止', sub: 'SHUTDOWN / SESSION CLOSED' });
     setPhase('leaving');
@@ -190,6 +193,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
                 setPhase('idle');
                 setInfo(null);
                 setLogLines([]);
+                onComplete?.();
               }, REVEAL_MS),
             );
           }, LOGOUT_LOAD_MS + 200),
@@ -204,11 +208,14 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   );
 
   const transitionLogin = useCallback(
-    (path = '/jobs') => runLogin(path),
+    (path = '/home', onComplete?: () => void) => runLogin(path, onComplete),
     [runLogin],
   );
 
-  const transitionLogout = useCallback((onCovered?: () => void) => runLogout(onCovered), [runLogout]);
+  const transitionLogout = useCallback(
+    (onCovered?: () => void, onComplete?: () => void) => runLogout(onCovered, onComplete),
+    [runLogout],
+  );
 
   // 卸载时清理
   useEffect(() => () => clearAll(), []);

@@ -75,8 +75,7 @@ export default function Login() {
     try {
       const res = await login(values);
       setAuth(res.token, res.nickname, res.role);
-      message.success(`欢迎，${res.nickname}`);
-      transitionLogin('/jobs');
+      transitionLogin('/home', () => message.success(`欢迎，${res.nickname}`));
     } catch (e) {
       showApiError(e, '登录失败，请检查用户名或密码');
     } finally {

@@ -10,6 +10,7 @@ import {
   LeftOutlined,
   RightOutlined,
   ThunderboltFilled,
+  HomeOutlined,
 } from '@ant-design/icons';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useRouteTransition } from './RouteTransition';
@@ -21,6 +22,7 @@ const { Sider, Header, Content } = Layout;
 
 // 画布是作业的子页面（/jobs/:id/editor），从作业管理的「编辑画布」进入，不单列菜单
 const menuItems = [
+  { key: '/home', icon: <HomeOutlined />, label: '首页', adminOnly: false },
   { key: '/jobs', icon: <UnorderedListOutlined />, label: '作业管理', adminOnly: false },
   { key: '/components', icon: <AppstoreOutlined />, label: '控件列表', adminOnly: false },
   { key: '/users', icon: <UserOutlined />, label: '用户管理', adminOnly: true },
@@ -66,11 +68,11 @@ export default function AppLayout() {
     : [{ title: currentLabel }];
 
   const handleLogout = () => {
-    // 先播转场，黑幕盖住后再清登录态，避免页面先跳到登录页
-    transitionLogout(() => {
-      logout();
-      message.success('已退出登录');
-    });
+    // 先播转场，黑幕盖住后清登录态，转场结束后再提示
+    transitionLogout(
+      () => logout(),
+      () => message.success('已退出登录'),
+    );
   };
 
   const collapseBtn = (
