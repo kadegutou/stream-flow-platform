@@ -135,20 +135,26 @@ html:not([data-sp-dark='true']) .sp-route-transition > em {
 }
 
 /* ========== 登录 / 退出专属转场 ========== */
-/* 登录：斜切条用品牌蓝，标题用更大字重，底部加进度线 */
+/* 登录：斜切条用品牌蓝，标题上移+更大字重 */
 .sp-route-transition.sp-rt-login > i {
   background: linear-gradient(180deg, #2f54eb, #5b8cff);
   width: clamp(160px, 18vw, 300px);
 }
+.sp-route-transition.sp-rt-login .sp-route-copy {
+  top: 38%;
+}
 .sp-route-transition.sp-rt-login .sp-route-copy b {
   font-size: clamp(52px, 7vw, 96px);
 }
-/* 退出：斜切条用暗红，整体更沉稳 */
+/* 退出：斜切条用暗红，标题同样上移+统一大小 */
 .sp-route-transition.sp-rt-logout > i {
   background: linear-gradient(180deg, #8b2a2a, #c04545);
 }
+.sp-route-transition.sp-rt-logout .sp-route-copy {
+  top: 38%;
+}
 .sp-route-transition.sp-rt-logout .sp-route-copy b {
-  font-size: clamp(42px, 5.5vw, 76px);
+  font-size: clamp(52px, 7vw, 96px);
 }
 /* 浅色模式下登录/退出条保持深色底 */
 html:not([data-sp-dark='true']) .sp-route-transition.sp-rt-login > i {
@@ -158,35 +164,35 @@ html:not([data-sp-dark='true']) .sp-route-transition.sp-rt-logout > i {
   background: linear-gradient(180deg, #8b2a2a, #c04545);
 }
 
-/* 登录进度条 */
+/* 登录进度条（在标题和日志之间，不碰蓝色带） */
 .sp-rt-progress {
   position: absolute;
   z-index: 4;
-  bottom: 18vh;
-  left: clamp(250px, 26vw, 480px);
+  top: 58%;
+  left: clamp(320px, 32vw, 560px);
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
 }
 .sp-rt-progress-bar {
-  width: clamp(280px, 30vw, 480px);
-  height: 3px;
+  width: clamp(360px, 38vw, 620px);
+  height: 5px;
   background: rgba(122, 165, 255, 0.15);
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
 }
 .sp-rt-progress-fill {
   height: 100%;
   background: linear-gradient(90deg, #2f54eb, #5b8cff, #7aa5ff);
-  border-radius: 2px;
+  border-radius: 3px;
   transition: width 0.1s linear;
-  box-shadow: 0 0 8px rgba(91, 140, 255, 0.4);
+  box-shadow: 0 0 10px rgba(91, 140, 255, 0.5);
 }
 .sp-rt-progress-pct {
   color: #7d8899;
-  font: 700 13px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 700 18px ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: 1px;
-  min-width: 42px;
+  min-width: 56px;
 }
 /* 浅色模式进度条 */
 html:not([data-sp-dark='true']) .sp-rt-progress-bar {
@@ -200,19 +206,23 @@ html:not([data-sp-dark='true']) .sp-rt-progress-pct {
   color: #98a0b0;
 }
 
-/* 终端日志区 */
+/* 终端日志区（在进度条下方，不截断） */
 .sp-rt-logs {
   position: absolute;
   z-index: 4;
-  bottom: 8vh;
+  top: 66%;
   left: clamp(250px, 26vw, 480px);
+}
+/* 登录日志右移避开蓝色带 */
+.sp-rt-login .sp-rt-logs {
+  left: clamp(320px, 32vw, 560px);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 .sp-rt-log-line {
   color: #5b8cff;
-  font: 400 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 400 18px ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: 0.5px;
   opacity: 0;
   animation: spRtLogIn 0.25s ease-out both;
