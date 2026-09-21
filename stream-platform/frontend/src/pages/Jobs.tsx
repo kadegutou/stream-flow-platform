@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Dropdown, Form, Input, InputNumber, message, Modal, Popconfirm, Segmented, Space, Table } from 'antd';
 import { DownloadOutlined, PlusOutlined, SearchOutlined, UnorderedListOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useRouteTransition } from '../components/RouteTransition';
 import dayjs from 'dayjs';
 import { createJob, deleteJob, listJobs, offlineJob, onlineJob } from '../api/jobs';
 import { showApiError } from '../api/request';
@@ -12,7 +12,7 @@ import { EmptyState } from '../components/EmptyState';
 import { JOB_TEMPLATES, type JobTemplate } from '../constants/jobTemplates';
 
 export default function Jobs() {
-  const navigate = useNavigate();
+  const { transitionTo } = useRouteTransition();
   const [data, setData] = useState<Job[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -209,7 +209,7 @@ export default function Jobs() {
             width: 280,
             render: (_, record) => (
               <Space wrap>
-                <Button size="small" type="link" onClick={() => navigate(`/jobs/${record.id}/editor`)}>
+                <Button size="small" type="link" onClick={() => transitionTo(`/jobs/${record.id}/editor`)}>
                   编辑画布
                 </Button>
                 <Popconfirm title="确认上线该作业？" onConfirm={() => onOnline(record.id)}>

@@ -21,7 +21,8 @@ import {
 import '@xyflow/react/dist/style.css';
 import { Button, Drawer, Form, Input, InputNumber, message, Modal, Select, Space, Switch, Tour, Typography } from 'antd';
 import { ArrowLeftOutlined, CheckCircleFilled, DeleteOutlined, ExclamationCircleFilled, ExportOutlined, ImportOutlined, LayoutOutlined, LeftOutlined, NodeExpandOutlined, QuestionCircleOutlined, RedoOutlined, RightOutlined, SaveOutlined, UndoOutlined } from '@ant-design/icons';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { useRouteTransition } from '../components/RouteTransition';
 import { useThemeStore } from '../store/theme';
 import { listComponents } from '../api/components';
 import { getJob, updateJob } from '../api/jobs';
@@ -234,7 +235,7 @@ function layeredLayout(nodes: ComponentFlowNode[], edges: Edge[]): ComponentFlow
 
 function FlowCanvas() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const { transitionTo } = useRouteTransition();
   const { screenToFlowPosition } = useReactFlow();
   const dark = useThemeStore((s) => s.dark);
 
@@ -619,7 +620,7 @@ function FlowCanvas() {
         }}
       >
         <Space>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/jobs')}>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => transitionTo('/jobs')}>
             返回
           </Button>
           <Typography.Text strong>

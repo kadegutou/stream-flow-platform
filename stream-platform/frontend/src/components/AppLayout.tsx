@@ -11,7 +11,8 @@ import {
   RightOutlined,
   ThunderboltFilled,
 } from '@ant-design/icons';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
+import { useRouteTransition } from './RouteTransition';
 import { Suspense, useMemo, useState } from 'react';
 import { useAuthStore } from '../store/auth';
 import { useThemeStore } from '../store/theme';
@@ -27,7 +28,7 @@ const menuItems = [
 ];
 
 export default function AppLayout() {
-  const navigate = useNavigate();
+  const { transitionTo, transitionLogout } = useRouteTransition();
   const location = useLocation();
   const { nickname, role, logout } = useAuthStore();
   const { dark, toggle } = useThemeStore();
@@ -53,7 +54,7 @@ export default function AppLayout() {
         {
           title: (
             <span
-              onClick={() => navigate('/jobs')}
+              onClick={() => transitionTo('/jobs')}
               style={{ cursor: 'pointer', color: 'inherit' }}
             >
               作业管理
@@ -67,7 +68,7 @@ export default function AppLayout() {
   const handleLogout = () => {
     logout();
     message.success('已退出登录');
-    navigate('/login');
+    transitionLogout();
   };
 
   const collapseBtn = (
@@ -173,7 +174,7 @@ export default function AppLayout() {
             mode="inline"
             selectedKeys={[selectedKey]}
             items={collapsed ? [] : visibleMenuItems}
-            onClick={({ key }) => navigate(key)}
+            onClick={({ key }) => transitionTo(key)}
             style={{ flex: 1, minHeight: 0 }}
           />
         </Sider>

@@ -6,6 +6,7 @@ import AppLayout from './components/AppLayout';
 import Login from './pages/Login';
 import { useAuthStore } from './store/auth';
 import { useThemeStore } from './store/theme';
+import { RouteTransitionProvider } from './components/RouteTransition';
 
 // 路由级懒加载：登录页与整体框架先加载，业务页面按需拉取（首屏更小更快）
 const Jobs = lazy(() => import('./pages/Jobs'));
@@ -90,6 +91,7 @@ export default function App() {
       }}
     >
       <BrowserRouter>
+        <RouteTransitionProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route
@@ -116,6 +118,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/jobs" replace />} />
           </Route>
         </Routes>
+        </RouteTransitionProvider>
       </BrowserRouter>
     </ConfigProvider>
     </ErrorBoundary>

@@ -9,6 +9,155 @@ body {
     'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
 }
 
+/* ========== Kylin 风格路由转场（平台蓝色系，明暗两套） ========== */
+.sp-route-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  overflow: hidden;
+  /* 深色模式（默认） */
+  background: #0d1420;
+  background-image:
+    linear-gradient(rgba(213, 219, 234, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(213, 219, 234, 0.04) 1px, transparent 1px);
+  background-size: 82px 82px;
+}
+/* 斜切强调条 */
+.sp-route-transition > i {
+  position: absolute;
+  z-index: 2;
+  background: #5b8cff;
+  width: clamp(120px, 13vw, 220px);
+  height: 150vh;
+  top: -25vh;
+  left: 13vw;
+  transform: skew(-18deg);
+}
+/* 路由标题 */
+.sp-route-copy {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: clamp(250px, 26vw, 480px);
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sp-route-copy span,
+.sp-route-copy small {
+  color: #7d8899;
+  font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 2px;
+}
+.sp-route-copy b {
+  color: #e8ecf5;
+  font: 900 clamp(46px, 6vw, 84px) / 1 "Noto Sans SC", "Microsoft YaHei UI", sans-serif;
+  white-space: nowrap;
+}
+/* 右下角巨大空心编号 */
+.sp-route-transition > em {
+  position: absolute;
+  bottom: -0.17em;
+  right: 4vw;
+  color: transparent;
+  -webkit-text-stroke: 2px rgba(213, 219, 234, 0.10);
+  font: italic 800 min(30vw, 420px) / 0.8 ui-monospace, monospace;
+}
+
+/* 浅色模式：米白底 + 品牌蓝斜切条 + 深蓝标题 */
+html:not([data-sp-dark='true']) .sp-route-transition {
+  background: #f3f5f9;
+  background-image:
+    linear-gradient(rgba(31, 45, 61, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 45, 61, 0.05) 1px, transparent 1px);
+}
+html:not([data-sp-dark='true']) .sp-route-transition > i {
+  background: #2f54eb;
+}
+html:not([data-sp-dark='true']) .sp-route-copy span,
+html:not([data-sp-dark='true']) .sp-route-copy small {
+  color: #98a0b0;
+}
+html:not([data-sp-dark='true']) .sp-route-copy b {
+  color: #1f2d3d;
+}
+html:not([data-sp-dark='true']) .sp-route-transition > em {
+  -webkit-text-stroke-color: rgba(31, 45, 61, 0.08);
+}
+
+/* 离开：黑幕从左扫入 */
+.sp-route-transition.is-leaving {
+  animation: spRouteCoverIn 0.43s cubic-bezier(0.76, 0, 0.24, 1) both;
+}
+.sp-route-transition.is-leaving > i {
+  animation: spRouteSignalIn 0.43s cubic-bezier(0.76, 0, 0.24, 1) both;
+}
+.sp-route-transition.is-leaving .sp-route-copy {
+  animation: spRouteCopyIn 0.33s cubic-bezier(0.16, 1, 0.3, 1) 45ms both;
+}
+/* 进入：黑幕向右扫出 */
+.sp-route-transition.is-entering {
+  animation: spRouteReveal 0.62s cubic-bezier(0.76, 0, 0.24, 1) both;
+}
+.sp-route-transition.is-entering .sp-route-copy {
+  animation: spRouteContentOut 0.48s cubic-bezier(0.7, 0, 0.84, 0) 80ms both;
+}
+.sp-route-transition.is-entering > i,
+.sp-route-transition.is-entering > em {
+  animation: spRouteFadeOut 0.48s 80ms both;
+}
+
+@keyframes spRouteCoverIn {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0); }
+}
+@keyframes spRouteSignalIn {
+  from { transform: skew(-18deg) translateX(-48vw); }
+  to   { transform: skew(-18deg) translateX(0); }
+}
+@keyframes spRouteCopyIn {
+  from { opacity: 0; transform: translate(-40px, -50%); }
+  to   { opacity: 1; transform: translate(0, -50%); }
+}
+@keyframes spRouteReveal {
+  0%, 18% { clip-path: inset(0); visibility: visible; }
+  to      { clip-path: inset(0 0 0 100%); visibility: hidden; }
+}
+@keyframes spRouteContentOut {
+  from { opacity: 1; transform: translate(0, -50%); }
+  to   { opacity: 0; transform: translate(54px, -50%); }
+}
+@keyframes spRouteFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* ========== 登录 / 退出专属转场 ========== */
+/* 登录：斜切条用品牌蓝，标题用更大字重，底部加进度线 */
+.sp-route-transition.sp-rt-login > i {
+  background: linear-gradient(180deg, #2f54eb, #5b8cff);
+  width: clamp(160px, 18vw, 300px);
+}
+.sp-route-transition.sp-rt-login .sp-route-copy b {
+  font-size: clamp(52px, 7vw, 96px);
+}
+/* 退出：斜切条用暗红，整体更沉稳 */
+.sp-route-transition.sp-rt-logout > i {
+  background: linear-gradient(180deg, #8b2a2a, #c04545);
+}
+.sp-route-transition.sp-rt-logout .sp-route-copy b {
+  font-size: clamp(42px, 5.5vw, 76px);
+}
+/* 浅色模式下登录/退出条保持深色底 */
+html:not([data-sp-dark='true']) .sp-route-transition.sp-rt-login > i {
+  background: linear-gradient(180deg, #2f54eb, #5b8cff);
+}
+html:not([data-sp-dark='true']) .sp-route-transition.sp-rt-logout > i {
+  background: linear-gradient(180deg, #8b2a2a, #c04545);
+}
+
 /* 登录页输入框：深色玻璃拟态下的强制适配（覆盖 affixWrapper 内层 input 背景）
    常态与聚焦态背景统一，避免点击后长方形颜色跳变 */
 .sp-login-page .ant-input-affix-wrapper,

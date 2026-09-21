@@ -7,7 +7,7 @@ import {
   ThunderboltOutlined,
   PartitionOutlined,
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useRouteTransition } from '../components/RouteTransition';
 import { useState } from 'react';
 import { login } from '../api/auth';
 import { showApiError } from '../api/request';
@@ -66,7 +66,7 @@ function FlowBackground() {
 }
 
 export default function Login() {
-  const navigate = useNavigate();
+  const { transitionLogin } = useRouteTransition();
   const setAuth = useAuthStore((s) => s.setAuth);
   const [loading, setLoading] = useState(false);
 
@@ -76,7 +76,7 @@ export default function Login() {
       const res = await login(values);
       setAuth(res.token, res.nickname, res.role);
       message.success(`欢迎，${res.nickname}`);
-      navigate('/jobs', { replace: true });
+      transitionLogin('/jobs');
     } catch (e) {
       showApiError(e, '登录失败，请检查用户名或密码');
     } finally {
