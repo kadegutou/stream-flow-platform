@@ -179,7 +179,7 @@ export default function AppLayout() {
             mode="inline"
             selectedKeys={[selectedKey]}
             items={collapsed ? [] : visibleMenuItems}
-            onClick={({ key }) => transitionTo(key)}
+            onClick={({ key }) => transitionTo(key, { skipTransition: true })}
             style={{ flex: 1, minHeight: 0 }}
           />
         </Sider>

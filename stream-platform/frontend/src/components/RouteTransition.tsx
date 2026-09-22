@@ -1,20 +1,23 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-/** 路由标题映射（转场时显示） */
-const ROUTE_TITLES: Record<string, { no: string; title: string; sub: string }> = {
-  '/home': { no: '00', title: '首页', sub: 'DASHBOARD' },
-  '/jobs': { no: '01', title: '作业管理', sub: 'JOB ORCHESTRATION' },
-  '/components': { no: '02', title: '控件列表', sub: 'COMPONENT REGISTRY' },
-  '/users': { no: '03', title: '用户管理', sub: 'USER ADMINISTRATION' },
-  '/monitor': { no: '04', title: '运行监控', sub: 'RUNTIME MONITOR' },
+/** 线条方向：左侧竖线 / 右侧竖线 / 顶部横线 / 底部横线 / 交叉 */
+type LineDir = 'left' | 'right' | 'top' | 'bottom' | 'cross';
+
+/** 路由标题映射 */
+const ROUTE_TITLES: Record<string, { no: string; title: string; sub: string; dir: LineDir }> = {
+  '/home': { no: '00', title: '首页', sub: 'DASHBOARD', dir: 'top' },
+  '/jobs': { no: '01', title: '作业管理', sub: 'JOB ORCHESTRATION', dir: 'left' },
+  '/components': { no: '02', title: '控件列表', sub: 'COMPONENT REGISTRY', dir: 'right' },
+  '/users': { no: '03', title: '用户管理', sub: 'USER ADMINISTRATION', dir: 'bottom' },
+  '/monitor': { no: '04', title: '运行监控', sub: 'RUNTIME MONITOR', dir: 'cross' },
 };
 
-function resolveRoute(pathname: string) {
+function resolveRoute(pathname: string): { no: string; title: string; sub: string; dir: LineDir } {
   if (pathname.startsWith('/jobs/') && pathname.endsWith('/editor')) {
-    return { no: '01-E', title: '编辑画布', sub: 'DAG CANVAS EDITOR' };
+    return { no: '01-E', title: '编辑画布', sub: 'DAG CANVAS EDITOR', dir: 'right' };
   }
-  return ROUTE_TITLES[pathname] ?? { no: '00', title: '平台', sub: 'STREAM PLATFORM' };
+  return ROUTE_TITLES[pathname] ?? { no: '00', title: '平台', sub: 'STREAM PLATFORM', dir: 'left' };
 }
 
 type TransitionKind = 'route' | 'login' | 'logout';
@@ -24,13 +27,12 @@ interface TransitionState {
   no: string;
   title: string;
   sub: string;
+  dir: LineDir;
 }
 
 interface TransitionCtx {
-  transitionTo: (path: string, opts?: { replace?: boolean }) => void;
-  /** 登录转场，onComplete 在黑幕扫出完成后回调 */
+  transitionTo: (path: string, opts?: { replace?: boolean; skipTransition?: boolean }) => void;
   transitionLogin: (path?: string, onComplete?: () => void) => void;
-  /** 退出登录转场，onCovered 在黑幕扫入完成后回调，onComplete 在扫出完成后回调 */
   transitionLogout: (onCovered?: () => void, onComplete?: () => void) => void;
 }
 
@@ -40,16 +42,11 @@ export function useRouteTransition() {
   return useContext(Ctx);
 }
 
-/** 普通路由转场时长 */
-const COVER_MS = 430;
-const REVEAL_MS = 620;
-
-/** 登录加载总时长（进度条从0到100%） */
+const COVER_MS = 600;
+const REVEAL_MS = 800;
 const LOGIN_LOAD_MS = 2400;
-/** 退出关闭总时长（日志逐行出现） */
 const LOGOUT_LOAD_MS = 1600;
 
-/** 登录加载日志（随进度条逐行出现） */
 const LOGIN_LOGS = [
   '> 验证用户凭证.........OK',
   '> 建立安全会话.........OK',
@@ -59,7 +56,6 @@ const LOGIN_LOGS = [
   '> 初始化完成',
 ];
 
-/** 退出关闭日志（逐行出现） */
 const LOGOUT_LOGS = [
   '> 保存会话状态.........OK',
   '> 清理临时数据.........OK',
@@ -67,12 +63,18 @@ const LOGOUT_LOGS = [
   '> 会话已安全终止',
 ];
 
+/** 登录/退出线条的 Y 位置（-160vh ~ 160vh），由 JS 驱动 */
+type LineAnimState = 'idle' | 'following' | 'exiting';
+
 export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<'idle' | 'leaving' | 'entering'>('idle');
   const [info, setInfo] = useState<TransitionState | null>(null);
   const [progress, setProgress] = useState(0);
   const [logLines, setLogLines] = useState<string[]>([]);
+  const [lineAnim, setLineAnim] = useState<LineAnimState>('idle');
+  const [linePct, setLinePct] = useState(0); // 0-100 线条跟随进度
+  const [flashPct, setFlashPct] = useState(false); // 100% 闪烁
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const raf = useRef<number>(0);
 
@@ -82,7 +84,6 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     cancelAnimationFrame(raf.current);
   };
 
-  /** 普通路由转场：扫入 → 跳转 → 扫出 */
   const runRoute = useCallback(
     (target: string, opts?: { replace?: boolean }) => {
       clearAll();
@@ -91,6 +92,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
       setPhase('leaving');
       setProgress(0);
       setLogLines([]);
+      setLineAnim('idle');
 
       timers.current.push(
         setTimeout(() => {
@@ -108,48 +110,56 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     [navigate],
   );
 
-  /** 登录转场：扫入 → 进度条0→100% + 日志 → 跳转 → 扫出 */
   const runLogin = useCallback(
     (target: string, onComplete?: () => void) => {
       clearAll();
-      setInfo({ kind: 'login', no: 'SYS', title: '系统初始化', sub: 'BOOT / AUTHENTICATION VERIFIED' });
+      setInfo({ kind: 'login', no: 'SYS', title: '系统初始化', sub: 'BOOT / AUTHENTICATION VERIFIED', dir: 'left' });
       setPhase('leaving');
       setProgress(0);
       setLogLines([]);
+      setLineAnim('following');
+      setLinePct(0);
+      setFlashPct(false);
 
-      // 黑幕扫入后开始进度条
       timers.current.push(
         setTimeout(() => {
           const start = performance.now();
           const tick = (now: number) => {
             const elapsed = now - start;
-            const pct = Math.min(100, Math.round((elapsed / LOGIN_LOAD_MS) * 100));
-            setProgress(pct);
-
-            // 按进度逐行显示日志
+            const pct = Math.min(100, (elapsed / LOGIN_LOAD_MS) * 100);
+            setProgress(Math.round(pct));
+            setLinePct(pct); // 线条跟随进度条（浮点数，连续）
             const lineIdx = Math.floor((pct / 100) * LOGIN_LOGS.length);
             setLogLines(LOGIN_LOGS.slice(0, Math.max(1, lineIdx)));
 
             if (pct < 100) {
               raf.current = requestAnimationFrame(tick);
             } else {
-              // 确保最后一行日志显示
               setLogLines(LOGIN_LOGS);
-              // 100%后短暂停留再跳转
+              // 100% 闪烁 3 次（约 0.9s）
+              setFlashPct(true);
               timers.current.push(
                 setTimeout(() => {
-                  navigate(target, { replace: true });
-                  setPhase('entering');
+                  setFlashPct(false);
+                  // 线条从屏幕下方缓慢离开
+                  setLineAnim('exiting');
                   timers.current.push(
                     setTimeout(() => {
-                      setPhase('idle');
-                      setInfo(null);
-                      setProgress(0);
-                      setLogLines([]);
-                      onComplete?.();
-                    }, REVEAL_MS),
+                      navigate(target, { replace: true });
+                      setPhase('entering');
+                      timers.current.push(
+                        setTimeout(() => {
+                          setPhase('idle');
+                          setInfo(null);
+                          setProgress(0);
+                          setLogLines([]);
+                          setLineAnim('idle');
+                          onComplete?.();
+                        }, REVEAL_MS),
+                      );
+                    }, 800), // 线条离开动画 0.8s
                   );
-                }, 300),
+                }, 900), // 闪烁 0.9s
               );
             }
           };
@@ -160,21 +170,21 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     [navigate],
   );
 
-  /** 退出转场：扫入 → 日志逐行 → 跳转 → 扫出 */
   const runLogout = useCallback((onCovered?: () => void, onComplete?: () => void) => {
     clearAll();
-    setInfo({ kind: 'logout', no: 'SYS', title: '会话终止', sub: 'SHUTDOWN / SESSION CLOSED' });
+    setInfo({ kind: 'logout', no: 'SYS', title: '会话终止', sub: 'SHUTDOWN / SESSION CLOSED', dir: 'left' });
     setPhase('leaving');
     setProgress(0);
     setLogLines([]);
+    setLineAnim('following');
+    setLinePct(0);
 
-    // 黑幕扫入后逐行显示日志
     timers.current.push(
       setTimeout(() => {
-        // 黑幕已盖住页面，此时清除登录态不会闪跳
         onCovered?.();
-
         const lineDelay = LOGOUT_LOAD_MS / (LOGOUT_LOGS.length + 1);
+
+        // 日志逐行出现
         LOGOUT_LOGS.forEach((_, i) => {
           timers.current.push(
             setTimeout(() => {
@@ -183,28 +193,52 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
           );
         });
 
-        // 日志全部显示后跳转
+        // 线条连续跟随（requestAnimationFrame 驱动）
+        const start = performance.now();
+        const tick = (now: number) => {
+          const elapsed = now - start;
+          const pct = Math.min(100, (elapsed / LOGOUT_LOAD_MS) * 100);
+          setLinePct(pct);
+          if (pct < 100) {
+            raf.current = requestAnimationFrame(tick);
+          }
+        };
+        raf.current = requestAnimationFrame(tick);
+
+        // 最后一行日志出来后 0.3s，线条缓慢离开
         timers.current.push(
           setTimeout(() => {
-            navigate('/login', { replace: true });
-            setPhase('entering');
+            setLineAnim('exiting');
             timers.current.push(
               setTimeout(() => {
-                setPhase('idle');
-                setInfo(null);
-                setLogLines([]);
-                onComplete?.();
-              }, REVEAL_MS),
+                navigate('/login', { replace: true });
+                setPhase('entering');
+                timers.current.push(
+                  setTimeout(() => {
+                    setPhase('idle');
+                    setInfo(null);
+                    setLogLines([]);
+                    setLineAnim('idle');
+                    onComplete?.();
+                  }, REVEAL_MS),
+                );
+              }, 800), // 线条离开动画 0.8s
             );
-          }, LOGOUT_LOAD_MS + 200),
+          }, LOGOUT_LOAD_MS + 300), // 最后一行 + 0.3s
         );
       }, COVER_MS),
     );
   }, [navigate]);
 
   const transitionTo = useCallback(
-    (path: string, opts?: { replace?: boolean }) => runRoute(path, opts),
-    [runRoute],
+    (path: string, opts?: { replace?: boolean; skipTransition?: boolean }) => {
+      if (opts?.skipTransition) {
+        navigate(path, { replace: opts?.replace });
+        return;
+      }
+      runRoute(path, opts);
+    },
+    [runRoute, navigate],
   );
 
   const transitionLogin = useCallback(
@@ -217,32 +251,80 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     [runLogout],
   );
 
-  // 卸载时清理
   useEffect(() => () => clearAll(), []);
 
   const isAuth = info?.kind === 'login' || info?.kind === 'logout';
+  const dir = info?.dir ?? 'left';
+
+  const copyPosClass =
+    dir === 'left' ? 'sp-rt-copy-right' :
+    dir === 'right' ? 'sp-rt-copy-left' :
+    dir === 'top' ? 'sp-rt-copy-below' :
+    dir === 'bottom' ? 'sp-rt-copy-above' :
+    'sp-rt-copy-right';
+
+  const emPosClass =
+    dir === 'left' ? 'sp-rt-em-br' :
+    dir === 'right' ? 'sp-rt-em-bl' :
+    dir === 'top' ? 'sp-rt-em-br' :
+    dir === 'bottom' ? 'sp-rt-em-tr' :
+    'sp-rt-em-bl';
+
+  // 登录/退出线条的 style（JS 驱动位置）
+  const getAuthLineStyle = (): React.CSSProperties => {
+    if (lineAnim === 'following') {
+      // 跟随进度：从屏幕上方外(-150vh)到屏幕中央(0vh)
+      const y = -150 + (linePct / 100) * 150;
+      return {
+        transform: `skew(-18deg) translateY(${y}vh)`,
+        opacity: 1,
+      };
+    }
+    if (lineAnim === 'exiting') {
+      // 从屏幕下方离开：先慢后快，滑出后再淡出
+      return {
+        transform: 'skew(-18deg) translateY(160vh)',
+        opacity: 1,
+        transition: 'transform 0.49s cubic-bezier(0.55, 0, 0.55, 0.2)',
+      };
+    }
+    return {};
+  };
 
   return (
     <Ctx.Provider value={{ transitionTo, transitionLogin, transitionLogout }}>
       {children}
       {phase !== 'idle' && info && (
-        <div className={`sp-route-transition is-${phase} sp-rt-${info.kind}`} aria-hidden>
-          <i />
-          <div className="sp-route-copy">
+        <div className={`sp-route-transition is-${phase} sp-rt-${info.kind} sp-rt-dir-${dir}`} aria-hidden>
+          {/* 普通路由转场：CSS 动画驱动 */}
+          {!isAuth && (
+            <>
+              {(dir === 'left' || dir === 'cross') && <i className="sp-rt-line sp-rt-line-v sp-rt-line-left" />}
+              {(dir === 'right' || dir === 'cross') && <i className="sp-rt-line sp-rt-line-v sp-rt-line-right" />}
+              {(dir === 'top' || dir === 'cross') && <i className="sp-rt-line sp-rt-line-h sp-rt-line-top" />}
+              {dir === 'bottom' && <i className="sp-rt-line sp-rt-line-h sp-rt-line-bottom" />}
+            </>
+          )}
+          {/* 登录/退出转场：JS 驱动线条位置 */}
+          {isAuth && (
+            <i
+              className={`sp-rt-line sp-rt-line-v sp-rt-line-left ${info.kind === 'login' ? 'sp-rt-line-login' : 'sp-rt-line-logout'}`}
+              style={getAuthLineStyle()}
+            />
+          )}
+          <div className={`sp-route-copy ${copyPosClass}`}>
             <span>{info.kind === 'route' ? `ROUTE / ${info.no}` : info.sub}</span>
             <b>{info.title}</b>
             <small>{info.kind === 'route' ? info.sub : 'STREAM PLATFORM'}</small>
           </div>
-          {/* 登录：进度条 */}
           {info.kind === 'login' && (
             <div className="sp-rt-progress">
               <div className="sp-rt-progress-bar">
                 <div className="sp-rt-progress-fill" style={{ width: `${progress}%` }} />
               </div>
-              <span className="sp-rt-progress-pct">{progress}%</span>
+              <span className={`sp-rt-progress-pct ${flashPct ? 'sp-rt-pct-flash' : ''}`}>{progress}%</span>
             </div>
           )}
-          {/* 登录/退出：终端日志 */}
           {isAuth && logLines.length > 0 && (
             <div className="sp-rt-logs">
               {logLines.map((line, i) => (
@@ -250,7 +332,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
               ))}
             </div>
           )}
-          <em>{info.no}</em>
+          <em className={emPosClass}>{info.no}</em>
         </div>
       )}
     </Ctx.Provider>

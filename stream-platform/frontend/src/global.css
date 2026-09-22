@@ -16,31 +16,55 @@ body {
   z-index: 1000;
   pointer-events: none;
   overflow: hidden;
-  /* 深色模式（默认） */
   background: #0d1420;
   background-image:
     linear-gradient(rgba(213, 219, 234, 0.04) 1px, transparent 1px),
     linear-gradient(90deg, rgba(213, 219, 234, 0.04) 1px, transparent 1px);
   background-size: 82px 82px;
 }
-/* 斜切强调条 */
-.sp-route-transition > i {
+
+/* ---- 方向线条（竖线从上往下扫，横线从左往右扫） ---- */
+.sp-rt-line {
   position: absolute;
   z-index: 2;
-  background: #5b8cff;
+}
+/* 竖线 */
+.sp-rt-line-v {
   width: clamp(120px, 13vw, 220px);
   height: 150vh;
   top: -25vh;
-  left: 13vw;
   transform: skew(-18deg);
 }
-/* 路由标题 */
+.sp-rt-line-left {
+  left: 13vw;
+  background: #5b8cff;
+}
+.sp-rt-line-right {
+  right: 13vw;
+  left: auto;
+  background: #5b8cff;
+}
+/* 横线 */
+.sp-rt-line-h {
+  height: clamp(80px, 10vh, 140px);
+  width: 150vw;
+  left: -25vw;
+  transform: skew(0, -4deg);
+}
+.sp-rt-line-top {
+  top: 12vh;
+  background: #5b8cff;
+}
+.sp-rt-line-bottom {
+  bottom: 12vh;
+  top: auto;
+  background: #5b8cff;
+}
+
+/* ---- 文字位置（根据线条方向） ---- */
 .sp-route-copy {
   position: absolute;
   z-index: 3;
-  top: 50%;
-  left: clamp(250px, 26vw, 480px);
-  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -56,24 +80,69 @@ body {
   font: 900 clamp(46px, 6vw, 84px) / 1 "Noto Sans SC", "Microsoft YaHei UI", sans-serif;
   white-space: nowrap;
 }
-/* 右下角巨大空心编号 */
+/* 竖线左：文字在线右边 */
+.sp-rt-copy-right {
+  top: 50%;
+  left: clamp(250px, 26vw, 480px);
+  transform: translateY(-50%);
+}
+/* 竖线右：文字在线左边 */
+.sp-rt-copy-left {
+  top: 50%;
+  right: clamp(250px, 26vw, 480px);
+  left: auto;
+  transform: translateY(-50%);
+  text-align: right;
+}
+/* 横线上：文字在线下方 */
+.sp-rt-copy-below {
+  top: clamp(120px, 20vh, 220px);
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+/* 横线下：文字在线上方 */
+.sp-rt-copy-above {
+  bottom: clamp(120px, 20vh, 220px);
+  top: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+/* ---- 编号位置（与线条相反） ---- */
 .sp-route-transition > em {
   position: absolute;
-  bottom: -0.17em;
-  right: 4vw;
   color: transparent;
   -webkit-text-stroke: 2px rgba(213, 219, 234, 0.10);
   font: italic 800 min(30vw, 420px) / 0.8 ui-monospace, monospace;
 }
+/* 右下角（竖线左/横线上） */
+.sp-rt-em-br {
+  bottom: -0.17em;
+  right: 4vw;
+}
+/* 左下角（竖线右/交叉） */
+.sp-rt-em-bl {
+  bottom: -0.17em;
+  left: 4vw;
+  right: auto;
+}
+/* 右上角（横线下） */
+.sp-rt-em-tr {
+  top: -0.17em;
+  right: 4vw;
+  bottom: auto;
+}
 
-/* 浅色模式：米白底 + 品牌蓝斜切条 + 深蓝标题 */
+/* 浅色模式 */
 html:not([data-sp-dark='true']) .sp-route-transition {
   background: #f3f5f9;
   background-image:
     linear-gradient(rgba(31, 45, 61, 0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgba(31, 45, 61, 0.05) 1px, transparent 1px);
 }
-html:not([data-sp-dark='true']) .sp-route-transition > i {
+html:not([data-sp-dark='true']) .sp-rt-line {
   background: #2f54eb;
 }
 html:not([data-sp-dark='true']) .sp-route-copy span,
@@ -87,35 +156,37 @@ html:not([data-sp-dark='true']) .sp-route-transition > em {
   -webkit-text-stroke-color: rgba(31, 45, 61, 0.08);
 }
 
-/* 离开：黑幕从左扫入 */
+/* ---- 黑幕扫入/扫出 ---- */
 .sp-route-transition.is-leaving {
   animation: spRouteCoverIn 0.43s cubic-bezier(0.76, 0, 0.24, 1) both;
-}
-.sp-route-transition.is-leaving > i {
-  animation: spRouteSignalIn 0.43s cubic-bezier(0.76, 0, 0.24, 1) both;
 }
 .sp-route-transition.is-leaving .sp-route-copy {
   animation: spRouteCopyIn 0.33s cubic-bezier(0.16, 1, 0.3, 1) 45ms both;
 }
-/* 进入：黑幕向右扫出 */
 .sp-route-transition.is-entering {
   animation: spRouteReveal 0.62s cubic-bezier(0.76, 0, 0.24, 1) both;
 }
 .sp-route-transition.is-entering .sp-route-copy {
   animation: spRouteContentOut 0.48s cubic-bezier(0.7, 0, 0.84, 0) 80ms both;
 }
-.sp-route-transition.is-entering > i,
 .sp-route-transition.is-entering > em {
   animation: spRouteFadeOut 0.48s 80ms both;
 }
 
+/* ---- 线条扫描动效：竖线从上往下穿过，横线从左往右穿过，中央停一下 ---- */
+/* 竖线：从上方进入 → 中央停住 → 继续向下出去（仅普通路由转场用，排除登录/退出） */
+.sp-route-transition:not(.sp-rt-login):not(.sp-rt-logout) .sp-rt-line-v {
+  animation: spRtLineVScan 2.2s cubic-bezier(0.76, 0, 0.24, 1) both;
+}
+/* 横线：从左方进入 → 中央停住 → 继续向右出去（仅普通路由转场用，排除登录/退出） */
+.sp-route-transition:not(.sp-rt-login):not(.sp-rt-logout) .sp-rt-line-h {
+  animation: spRtLineHScan 2.2s cubic-bezier(0.76, 0, 0.24, 1) both;
+}
+
+/* ---- 关键帧 ---- */
 @keyframes spRouteCoverIn {
   from { clip-path: inset(0 100% 0 0); }
   to   { clip-path: inset(0); }
-}
-@keyframes spRouteSignalIn {
-  from { transform: skew(-18deg) translateX(-48vw); }
-  to   { transform: skew(-18deg) translateX(0); }
 }
 @keyframes spRouteCopyIn {
   from { opacity: 0; transform: translate(-40px, -50%); }
@@ -132,6 +203,25 @@ html:not([data-sp-dark='true']) .sp-route-transition > em {
 @keyframes spRouteFadeOut {
   from { opacity: 1; }
   to   { opacity: 0; }
+}
+
+/* 竖线扫描：从上方进入 → 中央停住 → 继续向下出去 */
+@keyframes spRtLineVScan {
+  0%   { transform: skew(-18deg) translateY(-160vh); opacity: 0; }
+  5%   { opacity: 1; }
+  25%  { transform: skew(-18deg) translateY(0); opacity: 1; }
+  60%  { transform: skew(-18deg) translateY(0); opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: skew(-18deg) translateY(160vh); opacity: 0; }
+}
+/* 横线扫描：从左方进入 → 中央停住 → 继续向右出去 */
+@keyframes spRtLineHScan {
+  0%   { transform: skew(0, -4deg) translateX(-160vw); opacity: 0; }
+  5%   { opacity: 1; }
+  25%  { transform: skew(0, -4deg) translateX(0); opacity: 1; }
+  60%  { transform: skew(0, -4deg) translateX(0); opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: skew(0, -4deg) translateX(160vw); opacity: 0; }
 }
 
 /* ========== 登录 / 退出专属转场 ========== */
@@ -162,6 +252,24 @@ html:not([data-sp-dark='true']) .sp-route-transition.sp-rt-login > i {
 }
 html:not([data-sp-dark='true']) .sp-route-transition.sp-rt-logout > i {
   background: linear-gradient(180deg, #8b2a2a, #c04545);
+}
+
+/* 登录/退出线条颜色 */
+.sp-rt-line-login {
+  background: linear-gradient(180deg, #2f54eb, #5b8cff) !important;
+  width: clamp(160px, 18vw, 300px) !important;
+}
+.sp-rt-line-logout {
+  background: linear-gradient(180deg, #8b2a2a, #c04545) !important;
+}
+
+/* 100% 闪烁动画 */
+.sp-rt-pct-flash {
+  animation: spRtPctFlash 0.3s ease-in-out 3;
+}
+@keyframes spRtPctFlash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
 }
 
 /* 登录进度条（在标题和日志之间，不碰蓝色带） */
