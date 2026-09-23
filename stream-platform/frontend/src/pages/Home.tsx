@@ -79,17 +79,71 @@ function normalRandom(mean: number, sigma: number, min: number, max: number): nu
   return Math.max(min, Math.min(max, Math.round(val)));
 }
 
+/** 节点圆半径（SVG 里 r=22，选中 26） */
+const NODE_R = 22;
+/** 两圆最小间距（边缘到边缘） */
+const NODE_GAP = 12;
+
+/** 检查候选位置是否与现有节点圆相交 */
+function collides(x: number, y: number, existing: TopoNode[]): boolean {
+  const minDist = NODE_R * 2 + NODE_GAP; // 两圆心最小距离
+  return existing.some((n) => Math.hypot(n.x - x, n.y - y) < minDist);
+}
+
 function randomNode(type: NodeType, w: number, h: number, existing: TopoNode[]): TopoNode {
   const defs = NODE_DEFS[type];
   const idx = Math.floor(Math.random() * defs.labels.length);
   const xRange: [number, number] =
     type === 'source' ? [0.06, 0.22] : type === 'transform' ? [0.35, 0.65] : [0.78, 0.94];
-  let x = 0, y = 0, tries = 0;
-  do {
+
+  // 网格化均匀分布：把区域分成格子，找空闲格子放置
+  const cols = 3, rows = 4;
+  const cellW = ((xRange[1] - xRange[0]) * w) / cols;
+  const cellH = (0.7 * h) / rows;
+  const minDist = Math.min(cellW, cellH) * 0.55;
+
+  // 收集所有空闲格子
+  const freeCells: { cx: number; cy: number }[] = [];
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
+      const cx = xRange[0] * w + c * cellW + cellW / 2;
+      const cy = 0.15 * h + r * cellH + cellH / 2;
+      const occupied = existing.some((n) => Math.hypot(n.x - cx, n.y - cy) < minDist);
+      if (!occupied) freeCells.push({ cx, cy });
+    }
+  }
+
+  let x = 0, y = 0;
+  let placed = false;
+
+  // 先尝试空闲格子 + 随机偏移，每次检查圆碰撞
+  for (let attempt = 0; attempt < 20 && !placed; attempt++) {
+    if (freeCells.length > 0) {
+      const cell = freeCells[Math.floor(Math.random() * freeCells.length)];
+      const cx = cell.cx + (Math.random() - 0.5) * cellW * 0.4;
+      const cy = cell.cy + (Math.random() - 0.5) * cellH * 0.4;
+      if (!collides(cx, cy, existing)) {
+        x = cx; y = cy; placed = true;
+      }
+    } else {
+      break;
+    }
+  }
+
+  // 兜底：在区域内完全随机，仍检查碰撞
+  for (let attempt = 0; attempt < 30 && !placed; attempt++) {
+    const cx = (xRange[0] + Math.random() * (xRange[1] - xRange[0])) * w;
+    const cy = (0.15 + Math.random() * 0.7) * h;
+    if (!collides(cx, cy, existing)) {
+      x = cx; y = cy; placed = true;
+    }
+  }
+
+  // 最终兜底（极度密集时放弃碰撞检测，几乎不会触发）
+  if (!placed) {
     x = (xRange[0] + Math.random() * (xRange[1] - xRange[0])) * w;
     y = (0.15 + Math.random() * 0.7) * h;
-    tries++;
-  } while (tries < 30 && existing.some((n) => Math.hypot(n.x - x, n.y - y) < 90));
+  }
 
   return { id: nextId++, x, y, type, label: defs.labels[idx], tip: defs.tips[idx], opacity: 0 };
 }
@@ -159,22 +213,23 @@ function TopoGraph({ dark }: { dark: boolean }) {
   const [hoverEdge, setHoverEdge] = useState<number | null>(null);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const nodeColor = dark ? '#3ecfc0' : '#0d9b8a';
-  const nodeBg = dark ? '#0f1e28' : '#d8efe9';
-  const lineColor = dark ? 'rgba(62,207,192,.28)' : 'rgba(13,155,138,.22)';
-  const lineHighlight = dark ? 'rgba(62,207,192,.85)' : 'rgba(13,155,138,.65)';
-  const dotColor = dark ? '#5ee8d8' : '#1abfa8';
-  const textColor = dark ? '#6ab8ac' : '#3a7a6e';
-  const dimmed = dark ? 'rgba(62,207,192,.05)' : 'rgba(13,155,138,.03)';
+  const nodeColor = dark ? '#2ee8a0' : '#7c3aed';
+  const nodeBg = dark ? '#0a1e14' : '#ede4f8';
+  const lineColor = dark ? 'rgba(46,232,160,.28)' : 'rgba(124,58,237,.22)';
+  const lineHighlight = dark ? 'rgba(46,232,160,.85)' : 'rgba(124,58,237,.65)';
+  const dotColor = dark ? '#4ef0b8' : '#8b5cf6';
+  const textColor = dark ? '#5ac898' : '#6a4a9e';
+  const dimmed = dark ? 'rgba(46,232,160,.05)' : 'rgba(124,58,237,.03)';
 
   const clearTimers = () => {
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
   };
 
-  // 节点生灭循环：消失和生成交替，时间随机
+  // 节点生灭循环：严格交替（消失→生成→消失→生成...），时间随机
   useEffect(() => {
     let alive = true;
+    let lastWasRemove = false; // 上次是否是消失，保证交替
 
     const schedulePhase = () => {
       if (!alive) return;
@@ -183,12 +238,13 @@ function TopoGraph({ dark }: { dark: boolean }) {
       timersRef.current.push(
         setTimeout(() => {
           if (!alive) return;
-          // 随机决定是消失还是生成（保证交替：上次消失则这次生成）
-          const isRemove = Math.random() < 0.5;
+          // 严格交替：上次消失则这次生成，上次生成则这次消失
+          const isRemove = !lastWasRemove;
+          lastWasRemove = isRemove;
 
           if (isRemove) {
-            // 消失：正态分布 N(2, 0.5)，裁剪 [1, 3]
-            const count = normalRandom(2, 0.5, 1, 3);
+            // 消失：正态分布 N(2, 0.8)，裁剪 [1, 6]
+            const count = normalRandom(2, 0.8, 1, 6);
             setTopo((prev) => {
               const aliveNodes = prev.nodes.filter((n) => !n.dying);
               if (aliveNodes.length <= 4) return prev;
@@ -197,7 +253,27 @@ function TopoGraph({ dark }: { dark: boolean }) {
                 .slice(0, Math.min(count, aliveNodes.length - 3));
               const victimIds = new Set(victims.map((v) => v.id));
               const nodes = prev.nodes.map((n) => (victimIds.has(n.id) ? { ...n, dying: true } : n));
-              const edges = prev.edges.filter((e) => !victimIds.has(e.from) && !victimIds.has(e.to));
+              let edges = prev.edges.filter((e) => !victimIds.has(e.from) && !victimIds.has(e.to));
+
+              // 修复孤立节点：消失后检查每个存活节点是否至少有一条边
+              const aliveAfter = nodes.filter((n) => !n.dying);
+              for (const n of aliveAfter) {
+                const hasEdge = edges.some((e) => e.from === n.id || e.to === n.id);
+                if (!hasEdge) {
+                  // 找最近的非 dying 节点连线
+                  const others = aliveAfter.filter((o) => o.id !== n.id);
+                  if (others.length > 0) {
+                    const nearest = others.sort(
+                      (a, b) => Math.hypot(a.x - n.x, a.y - n.y) - Math.hypot(b.x - n.x, b.y - n.y),
+                    )[0];
+                    edges = [...edges, {
+                      from: n.x < nearest.x ? n.id : nearest.id,
+                      to: n.x < nearest.x ? nearest.id : n.id,
+                      throughput: randomThroughput(),
+                    }];
+                  }
+                }
+              }
               return { nodes, edges };
             });
             // 0.8s 后清除 dying 节点
@@ -212,8 +288,8 @@ function TopoGraph({ dark }: { dark: boolean }) {
               }, 800),
             );
           } else {
-            // 生成：正态分布 N(2, 0.5)，裁剪 [1, 3]
-            const count = normalRandom(2, 0.5, 1, 3);
+            // 生成：正态分布 N(2, 0.8)，裁剪 [1, 6]
+            const count = normalRandom(2, 0.8, 1, 6);
             setTopo((prev) => {
               const nodes = [...prev.nodes];
               const edges = [...prev.edges];
@@ -264,7 +340,7 @@ function TopoGraph({ dark }: { dark: boolean }) {
           ...prev,
           nodes: prev.nodes.map((n) => ({
             ...n,
-            opacity: n.dying ? Math.max(0, n.opacity - 0.025) : Math.min(1, n.opacity + 0.015),
+            opacity: n.dying ? Math.max(0, n.opacity - 0.015) : Math.min(1, n.opacity + 0.015),
           })),
         };
       });
@@ -443,7 +519,7 @@ function TopoGraph({ dark }: { dark: boolean }) {
 /* ========== 浮动粒子背景 ========== */
 
 function Particles({ dark }: { dark: boolean }) {
-  const color = dark ? 'rgba(62,207,192,.1)' : 'rgba(13,155,138,.07)';
+  const color = dark ? 'rgba(46,232,160,.1)' : 'rgba(124,58,237,.07)';
   const particles = useRef(
     Array.from({ length: 25 }, (_, i) => ({
       id: i,
@@ -497,14 +573,14 @@ export default function Home() {
 
   const bgColor = dark ? '#050a10' : '#dde3ec';
   const cardBg = dark ? '#0d1822' : '#fff';
-  const cardBorder = dark ? 'rgba(62,207,192,.22)' : 'rgba(13,155,138,.14)';
-  const cardHoverBorder = dark ? 'rgba(62,207,192,.55)' : 'rgba(13,155,138,.45)';
+  const cardBorder = dark ? 'rgba(62,207,192,.22)' : 'rgba(124,58,237,.14)';
+  const cardHoverBorder = dark ? 'rgba(62,207,192,.55)' : 'rgba(124,58,237,.45)';
   const textPrimary = dark ? '#f4faf8' : '#1a2332';
-  const textSecondary = dark ? '#6ab8ac' : '#3a7a6e';
-  const accentColor = dark ? '#3ecfc0' : '#0d9b8a';
+  const textSecondary = dark ? '#6ab8ac' : '#6a4a9e';
+  const accentColor = dark ? '#3ecfc0' : '#7c3aed';
   const glowBg = dark
     ? 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(62,207,192,.08), transparent)'
-    : 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(13,155,138,.05), transparent)';
+    : 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(124,58,237,.06), transparent)';
 
   return (
     <div
@@ -623,8 +699,8 @@ export default function Home() {
               e.currentTarget.style.transform = 'translateY(-3px)';
               e.currentTarget.style.borderColor = cardHoverBorder;
               e.currentTarget.style.boxShadow = dark
-                ? '0 4px 20px rgba(62,207,192,.15)'
-                : '0 4px 20px rgba(13,155,138,.12)';
+                ? '0 4px 20px rgba(46,232,160,.15)'
+                : '0 4px 20px rgba(124,58,237,.12)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'translateY(0)';

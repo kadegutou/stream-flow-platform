@@ -44,8 +44,11 @@ export function useRouteTransition() {
 
 const COVER_MS = 600;
 const REVEAL_MS = 800;
+const AUTH_REVEAL_MS = 400; // 登录/退出扫出更快
 const LOGIN_LOAD_MS = 2400;
 const LOGOUT_LOAD_MS = 1600;
+const LINE_EXIT_MS = 250; // 线条退出动画时长（速度翻倍）
+const LINE_EXIT_WAIT_MS = 150; // 线条退出后多久扫出
 
 const LOGIN_LOGS = [
   '> 验证用户凭证.........OK',
@@ -64,13 +67,13 @@ const LOGOUT_LOGS = [
 ];
 
 /** 登录/退出线条的 Y 位置（-160vh ~ 160vh），由 JS 驱动 */
-type LineAnimState = 'idle' | 'following' | 'exiting';
+type LineAnimState = 'idle' | 'entering' | 'following' | 'holding' | 'exiting';
 
 export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<'idle' | 'leaving' | 'entering'>('idle');
   const [info, setInfo] = useState<TransitionState | null>(null);
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(0); // 浮点进度 0-100
   const [logLines, setLogLines] = useState<string[]>([]);
   const [lineAnim, setLineAnim] = useState<LineAnimState>('idle');
   const [linePct, setLinePct] = useState(0); // 0-100 线条跟随进度
@@ -127,8 +130,8 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
           const tick = (now: number) => {
             const elapsed = now - start;
             const pct = Math.min(100, (elapsed / LOGIN_LOAD_MS) * 100);
-            setProgress(Math.round(pct));
-            setLinePct(pct); // 线条跟随进度条（浮点数，连续）
+            setProgress(pct); // 浮点数，和线条同步
+            setLinePct(pct);
             const lineIdx = Math.floor((pct / 100) * LOGIN_LOGS.length);
             setLogLines(LOGIN_LOGS.slice(0, Math.max(1, lineIdx)));
 
@@ -141,7 +144,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
               timers.current.push(
                 setTimeout(() => {
                   setFlashPct(false);
-                  // 线条从屏幕下方缓慢离开
+                  // 线条从屏幕下方快速离开
                   setLineAnim('exiting');
                   timers.current.push(
                     setTimeout(() => {
@@ -155,9 +158,9 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
                           setLogLines([]);
                           setLineAnim('idle');
                           onComplete?.();
-                        }, REVEAL_MS),
+                        }, AUTH_REVEAL_MS),
                       );
-                    }, 800), // 线条离开动画 0.8s
+                    }, LINE_EXIT_WAIT_MS),
                   );
                 }, 900), // 闪烁 0.9s
               );
@@ -176,7 +179,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
     setPhase('leaving');
     setProgress(0);
     setLogLines([]);
-    setLineAnim('following');
+    setLineAnim('entering'); // 线条从一开始就穿出
     setLinePct(0);
 
     timers.current.push(
@@ -193,19 +196,23 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
           );
         });
 
-        // 线条连续跟随（requestAnimationFrame 驱动）
-        const start = performance.now();
-        const tick = (now: number) => {
-          const elapsed = now - start;
-          const pct = Math.min(100, (elapsed / LOGOUT_LOAD_MS) * 100);
+        // 线条从上方外滑入到中央（0.6s），然后停住等日志
+        const enterStart = performance.now();
+        const ENTER_DUR = 600;
+        const enterTick = (now: number) => {
+          const elapsed = now - enterStart;
+          const pct = Math.min(100, (elapsed / ENTER_DUR) * 100);
           setLinePct(pct);
           if (pct < 100) {
-            raf.current = requestAnimationFrame(tick);
+            raf.current = requestAnimationFrame(enterTick);
+          } else {
+            // 到达中央，停住等日志
+            setLineAnim('holding');
           }
         };
-        raf.current = requestAnimationFrame(tick);
+        raf.current = requestAnimationFrame(enterTick);
 
-        // 最后一行日志出来后 0.3s，线条缓慢离开
+        // 最后一行日志出来后 0.3s，线条快速离开
         timers.current.push(
           setTimeout(() => {
             setLineAnim('exiting');
@@ -220,9 +227,9 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
                     setLogLines([]);
                     setLineAnim('idle');
                     onComplete?.();
-                  }, REVEAL_MS),
+                  }, AUTH_REVEAL_MS),
                 );
-              }, 800), // 线条离开动画 0.8s
+              }, LINE_EXIT_WAIT_MS),
             );
           }, LOGOUT_LOAD_MS + 300), // 最后一行 + 0.3s
         );
@@ -272,6 +279,14 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
 
   // 登录/退出线条的 style（JS 驱动位置）
   const getAuthLineStyle = (): React.CSSProperties => {
+    if (lineAnim === 'entering') {
+      // 从屏幕上方外滑入到中央
+      const y = -160 + (linePct / 100) * 160;
+      return {
+        transform: `skew(-18deg) translateY(${y}vh)`,
+        opacity: Math.min(1, linePct / 20), // 前 20% 淡入
+      };
+    }
     if (lineAnim === 'following') {
       // 跟随进度：从屏幕上方外(-150vh)到屏幕中央(0vh)
       const y = -150 + (linePct / 100) * 150;
@@ -280,12 +295,19 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
         opacity: 1,
       };
     }
+    if (lineAnim === 'holding') {
+      // 停在屏幕中央
+      return {
+        transform: 'skew(-18deg) translateY(0vh)',
+        opacity: 1,
+      };
+    }
     if (lineAnim === 'exiting') {
-      // 从屏幕下方离开：先慢后快，滑出后再淡出
+      // 从屏幕下方快速离开
       return {
         transform: 'skew(-18deg) translateY(160vh)',
         opacity: 1,
-        transition: 'transform 0.49s cubic-bezier(0.55, 0, 0.55, 0.2)',
+        transition: `transform ${LINE_EXIT_MS}ms cubic-bezier(0.55, 0, 0.55, 0.2)`,
       };
     }
     return {};
@@ -322,7 +344,7 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
               <div className="sp-rt-progress-bar">
                 <div className="sp-rt-progress-fill" style={{ width: `${progress}%` }} />
               </div>
-              <span className={`sp-rt-progress-pct ${flashPct ? 'sp-rt-pct-flash' : ''}`}>{progress}%</span>
+              <span className={`sp-rt-progress-pct ${flashPct ? 'sp-rt-pct-flash' : ''}`}>{Math.round(progress)}%</span>
             </div>
           )}
           {isAuth && logLines.length > 0 && (

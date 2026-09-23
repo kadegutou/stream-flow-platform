@@ -293,7 +293,7 @@ html:not([data-sp-dark='true']) .sp-route-transition.sp-rt-logout > i {
   height: 100%;
   background: linear-gradient(90deg, #2f54eb, #5b8cff, #7aa5ff);
   border-radius: 3px;
-  transition: width 0.1s linear;
+  transition: none;
   box-shadow: 0 0 10px rgba(91, 140, 255, 0.5);
 }
 .sp-rt-progress-pct {
