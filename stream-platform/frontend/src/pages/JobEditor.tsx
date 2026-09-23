@@ -29,6 +29,7 @@ import { showApiError } from '../api/request';
 import { appMessage, appModal } from '../utils/antdApp';
 import { EdgeCollapseButton, useEdgeHover } from '../components/EdgeCollapseButton';
 import { usePrefersReducedMotion } from '../utils/motion';
+import { FIXED, palette } from '../theme/palette';
 import type { ComponentCategory, ComponentDef, Dag, Job } from '../types';
 import { CATEGORY_LABEL, categoryBg, categoryColor } from '../theme/category';
 import { ParamFormItems } from '../components/ParamFormItems';
@@ -51,6 +52,7 @@ const CATEGORY_ICON: Record<ComponentCategory, React.ReactNode> = {
 function ComponentNode(props: NodeProps<ComponentFlowNode>) {
   const dark = useThemeStore((s) => s.dark);
   const { data, selected } = props;
+  const p = palette(dark);
   const color = categoryColor(data.category, dark);
   const bg = categoryBg(data.category, dark);
   return (
@@ -59,10 +61,10 @@ function ComponentNode(props: NodeProps<ComponentFlowNode>) {
         display: 'flex',
         alignItems: 'stretch',
         borderRadius: 10,
-        background: dark ? '#1b2334' : '#fff',
+        background: dark ? p.node : p.surface,
         minWidth: 176,
         overflow: 'hidden',
-        border: `1px solid ${selected ? color : dark ? '#2c3a55' : '#e4e8f0'}`,
+        border: `1px solid ${selected ? color : p.border}`,
         boxShadow: selected
           ? `0 0 0 3px ${color}33, 0 6px 16px rgba(0,0,0,.35)`
           : dark
@@ -94,17 +96,17 @@ function ComponentNode(props: NodeProps<ComponentFlowNode>) {
           style={{ position: 'absolute', top: 6, right: 8, fontSize: 12, lineHeight: 1 }}
         >
           {isNodeConfigured(data) ? (
-            <CheckCircleFilled style={{ color: '#52c41a' }} />
+            <CheckCircleFilled style={{ color: FIXED.okBadge }} />
           ) : (
-            <ExclamationCircleFilled style={{ color: '#fa8c16' }} />
+            <ExclamationCircleFilled style={{ color: FIXED.warnBadge }} />
           )}
         </span>
         <div style={{ fontSize: 11, color, fontWeight: 700, letterSpacing: 0.4, lineHeight: 1.5 }}>
           {data.category} · {CATEGORY_LABEL[data.category]}
         </div>
-        <div style={{ fontWeight: 600, fontSize: 13, color: dark ? '#d5dbea' : '#1f2d3d', marginTop: 1 }}>{data.name}</div>
+        <div style={{ fontWeight: 600, fontSize: 13, color: p.text, marginTop: 1 }}>{data.name}</div>
         {/* 控件编码：原 #a0a6b5/#5f6b84 分别只有 2.44:1 与 2.93:1，投影下基本看不清 */}
-        <div style={{ fontSize: 11, color: dark ? '#8b96ad' : '#6b7280', fontFamily: 'monospace', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 11, color: p.textSubtle, fontFamily: 'monospace', lineHeight: 1.5 }}>
           {data.componentCode}
         </div>
       </div>
@@ -168,6 +170,7 @@ function FlowCanvas() {
   const { transitionTo } = useRouteTransition();
   const { screenToFlowPosition } = useReactFlow();
   const dark = useThemeStore((s) => s.dark);
+  const p = palette(dark);
 
   const [job, setJob] = useState<Job | null>(null);
   const [components, setComponents] = useState<ComponentDef[]>([]);
@@ -526,7 +529,7 @@ function FlowCanvas() {
       {/* 顶部工具栏 */}
       <div
         style={{
-          background: dark ? '#141b2b' : '#fff',
+          background: p.surface,
           padding: '8px 16px',
           marginBottom: 8,
           borderRadius: 8,
@@ -581,7 +584,7 @@ function FlowCanvas() {
             <div
               style={{
                 height: '100%',
-                background: dark ? '#141b2b' : '#fff',
+                background: p.surface,
                 borderRadius: 8,
                 padding: 12,
                 overflow: 'auto',
@@ -608,12 +611,12 @@ function FlowCanvas() {
                         padding: '6px 8px',
                         margin: '6px 0',
                         cursor: 'grab',
-                        background: dark ? '#1b2334' : '#fafafa',
+                        background: dark ? p.node : FIXED.paletteItemBg,
                         fontSize: 13,
                       }}
                     >
                       {comp.name}
-                      <div style={{ fontSize: 12, color: dark ? '#8b96ad' : '#6b7280' }}>{comp.code}</div>
+                      <div style={{ fontSize: 12, color: p.textSubtle }}>{comp.code}</div>
                     </div>
                   ))}
                 </div>
@@ -621,7 +624,7 @@ function FlowCanvas() {
             </div>
           )}
           {panelCollapsed && (
-            <div style={{ height: '100%', background: dark ? '#1b2334' : '#f0f0f0', borderRadius: 8 }} />
+            <div style={{ height: '100%', background: dark ? p.node : p.surfaceMuted, borderRadius: 8 }} />
           )}
           {/* 悬停面板区域时出现折叠/展开按钮：半透明、垂直居中、直边贴栏、外侧半圆 */}
           {panelHover && (
@@ -635,7 +638,7 @@ function FlowCanvas() {
         </div>
 
         {/* 画布 */}
-        <div ref={canvasWrapRef} style={{ flex: 1, borderRadius: 8, overflow: 'hidden', background: dark ? '#0f1420' : '#fff', position: 'relative' }}>
+        <div ref={canvasWrapRef} style={{ flex: 1, borderRadius: 8, overflow: 'hidden', background: p.canvas, position: 'relative' }}>
           {/* 碎裂动画关键帧（小方块坠落出画布底部） */}
           <style>{`
             @keyframes sp-shatter-fall {
@@ -665,15 +668,15 @@ function FlowCanvas() {
             proOptions={{ hideAttribution: true }}
             colorMode={dark ? 'dark' : 'light'}
           >
-            <Background gap={16} color={dark ? '#232c42' : '#e8ebf2'} />
+            <Background gap={16} color={p.canvasDot} />
             <Controls />
             <MiniMap
               nodeColor={(n) => {
                 const cat = (n.data as ComponentNodeData).category;
                 return cat ? categoryColor(cat, dark) : '#78839a';
               }}
-              maskColor={dark ? 'rgba(15,20,32,.72)' : 'rgba(243,245,249,.72)'}
-              bgColor={dark ? '#141b2b' : '#fff'}
+              maskColor={p.minimapMask}
+              bgColor={p.surface}
               style={{ borderRadius: 8 }}
               pannable
               zoomable
@@ -691,13 +694,19 @@ function FlowCanvas() {
                 width: 120,
                 height: 64,
                 borderRadius: 12,
-                border: `2px dashed ${trashActive ? '#ff4d4f' : '#bbb'}`,
-                background: trashActive ? (dark ? '#3a1f24' : '#fff1f0') : dark ? 'rgba(27,35,52,.92)' : 'rgba(255,255,255,.92)',
+                border: `2px dashed ${trashActive ? FIXED.trashDanger : '#bbb'}`,
+                background: trashActive
+                  ? dark
+                    ? '#3a1f24'
+                    : '#fff1f0'
+                  : dark
+                    ? 'rgba(27,35,52,.92)'
+                    : 'rgba(255,255,255,.92)',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: trashActive ? '#ff4d4f' : dark ? '#8b96ad' : '#6b7280',
+                color: trashActive ? FIXED.trashDanger : p.textSubtle,
                 fontSize: 12,
                 zIndex: 10,
                 pointerEvents: 'none',

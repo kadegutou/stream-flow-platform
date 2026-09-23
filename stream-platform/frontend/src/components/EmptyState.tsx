@@ -1,7 +1,11 @@
 import { Empty } from 'antd';
+import { useThemeStore } from '../store/theme';
+import { palette } from '../theme/palette';
 
 /** 表格空状态：简单 SVG 插画 + 提示文案（全站统一） */
 export function EmptyState({ description = '暂无数据' }: { description?: string }) {
+  const dark = useThemeStore((s) => s.dark);
+  const p = palette(dark);
   return (
     <Empty
       image={
@@ -19,7 +23,7 @@ export function EmptyState({ description = '暂无数据' }: { description?: str
         </svg>
       }
       imageStyle={{ height: 88 }}
-      description={<span style={{ color: '#6b7280', fontSize: 13 }}>{description}</span>}
+      description={<span style={{ color: p.textSubtle, fontSize: 13 }}>{description}</span>}
     />
   );
 }

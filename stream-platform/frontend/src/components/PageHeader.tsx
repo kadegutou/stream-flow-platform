@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import { Typography } from 'antd';
+import { useThemeStore } from '../store/theme';
+import { palette } from '../theme/palette';
 
 /** 页面标题区：图标徽章 + 标题 + 副标题说明（全站统一） */
 export function PageHeader({
@@ -13,6 +15,8 @@ export function PageHeader({
   subtitle?: string;
   extra?: ReactNode;
 }) {
+  const dark = useThemeStore((s) => s.dark);
+  const p = palette(dark);
   return (
     <div
       style={{
@@ -28,13 +32,13 @@ export function PageHeader({
             width: 44,
             height: 44,
             borderRadius: 12,
-            background: 'linear-gradient(135deg, #2f54eb 0%, #5b8cff 100%)',
-            color: '#fff',
+            background: p.accentGradient,
+            color: p.onBrand,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: 20,
-            boxShadow: '0 4px 12px rgba(47,84,235,.28)',
+            boxShadow: `0 4px 12px rgba(${p.brandSeedRgb},.28)`,
             flexShrink: 0,
           }}
         >

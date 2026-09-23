@@ -18,6 +18,7 @@ import { Suspense, useMemo, useState } from 'react';
 import { useAuthStore } from '../store/auth';
 import { MAX_FONT_SCALE, MIN_FONT_SCALE, useFontScaleStore, useThemeStore } from '../store/theme';
 import { appMessage } from '../utils/antdApp';
+import { palette } from '../theme/palette';
 
 const { Sider, Header, Content } = Layout;
 
@@ -36,6 +37,7 @@ export default function AppLayout() {
   const { nickname, role, logout } = useAuthStore();
   const { dark, toggle } = useThemeStore();
   const { scale, increase, decrease } = useFontScaleStore();
+  const p = palette(dark);
   const [collapsed, setCollapsed] = useState(false);
   const { hover: siderHover, handlers: siderHoverHandlers } = useEdgeHover();
 
@@ -46,7 +48,7 @@ export default function AppLayout() {
 
   /** 字体缩放按钮的颜色：到达上下限时变暗，提示不可再调 */
   const scaleBtnColor = (atLimit: boolean) =>
-    dark ? (atLimit ? '#444' : '#d5dbea') : atLimit ? '#ccc' : '#5a6072';
+    atLimit ? p.textDisabled : dark ? p.text : p.textMuted;
 
   // 编辑器路由 /jobs/:id/editor 高亮「作业管理」
   const selectedKey = location.pathname.startsWith('/jobs')
@@ -101,14 +103,14 @@ export default function AppLayout() {
             display: 'flex',
             flexDirection: 'column',
             // 与登录页同一套深蓝渐变，保证进入系统后的视觉连贯
-            background: 'linear-gradient(180deg, #141e30 0%, #243b55 100%)',
-            boxShadow: '2px 0 12px rgba(20,30,48,.18)',
+            background: p.brandDeepGradient,
+            boxShadow: `2px 0 12px rgba(${p.inkRgb},.18)`,
           }}
         >
           {!collapsed && (
             <div
               style={{
-                color: '#fff',
+                color: p.onBrand,
                 fontWeight: 600,
                 fontSize: 15,
                 padding: '18px 16px',
@@ -124,13 +126,13 @@ export default function AppLayout() {
                   width: 28,
                   height: 28,
                   borderRadius: 8,
-                  background: 'linear-gradient(135deg, #2f54eb 0%, #5b8cff 100%)',
+                  background: p.accentGradient,
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: 15,
                   flexShrink: 0,
-                  boxShadow: '0 3px 10px rgba(47,84,235,.45)',
+                  boxShadow: `0 3px 10px rgba(${p.brandSeedRgb},.45)`,
                 }}
               >
                 <ThunderboltFilled />
@@ -164,13 +166,13 @@ export default function AppLayout() {
       <Layout>
         <Header
           style={{
-            background: dark ? '#141b2b' : '#fff',
+            background: p.surface,
             padding: '0 24px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             boxShadow: '0 1px 4px rgba(0,21,41,.08)',
-            borderBottom: `1px solid ${dark ? 'rgba(255,255,255,.06)' : 'rgba(20,30,48,.06)'}`,
+            borderBottom: `1px solid ${p.borderHairline}`,
           }}
         >
           {/* 左侧：当前位置（原为空白，进系统后缺少方位感） */}
@@ -192,7 +194,7 @@ export default function AppLayout() {
                 aria-live="polite"
                 style={{
                   fontSize: 11,
-                  color: dark ? '#8b96ad' : '#6b7280',
+                  color: p.textSubtle,
                   minWidth: 32,
                   textAlign: 'center',
                   userSelect: 'none',
@@ -215,7 +217,8 @@ export default function AppLayout() {
             <IconActionButton
               label={dark ? '切换为浅色模式' : '切换为暗色模式'}
               onClick={toggle}
-              color={dark ? '#f5c518' : '#5a6072'}
+              // 太阳图标用固定的暖黄，不随品牌色走
+              color={dark ? '#f5c518' : p.textMuted}
               fontSize={17}
             >
               {dark ? <SunOutlined /> : <MoonOutlined />}
@@ -225,11 +228,11 @@ export default function AppLayout() {
                 items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: handleLogout }],
               }}
             >
-              <Space style={{ cursor: 'pointer', color: dark ? '#d5dbea' : undefined }}>
+              <Space style={{ cursor: 'pointer', color: dark ? p.text : undefined }}>
                 <Avatar icon={<UserOutlined />} />
                 <span>{nickname || '用户'}</span>
                 {role && (
-                  <span style={{ color: dark ? '#8b96ad' : '#6b7280', fontSize: 12 }}>
+                  <span style={{ color: p.textSubtle, fontSize: 12 }}>
                     ({role === 'ADMIN' ? '管理员' : '普通用户'})
                   </span>
                 )}

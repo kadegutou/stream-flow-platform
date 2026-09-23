@@ -8,6 +8,7 @@ import { useThemeStore } from './store/theme';
 import { RouteTransitionProvider, useRouteTransition } from './components/RouteTransition';
 import { appMessage, bindAppInstances } from './utils/antdApp';
 import { setUnauthorizedHandler } from './api/session';
+import { applyThemeVars, palette } from './theme/palette';
 
 // 路由级懒加载：登录页与整体框架先加载，业务页面按需拉取（首屏更小更快）
 // AppLayout 同样懒加载：菜单/布局等只有登录后才需要，首屏不为它们付体积
@@ -75,6 +76,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
           alignItems: 'center',
           justifyContent: 'center',
           padding: 24,
+          // 固定浅色：主题状态本身可能就是崩溃原因，这里与调色板解耦
           background: '#f3f5f9',
           color: '#1f2d3d',
           fontFamily:
@@ -85,7 +87,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
           style={{
             width: '100%',
             maxWidth: 560,
-            background: '#fff',
+            background: '#ffffff',
             borderRadius: 12,
             padding: '28px 28px 24px',
             boxShadow: '0 8px 32px rgba(31,45,61,.12)',
@@ -102,7 +104,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
               style={{
                 padding: '8px 18px',
                 fontSize: 14,
-                color: '#fff',
+                color: '#ffffff',
                 background: '#2f54eb',
                 border: 'none',
                 borderRadius: 8,
@@ -117,7 +119,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
                 padding: '8px 18px',
                 fontSize: 14,
                 color: '#1f2d3d',
-                background: '#fff',
+                background: '#ffffff',
                 border: '1px solid #d9d9d9',
                 borderRadius: 8,
                 cursor: 'pointer',
@@ -153,8 +155,11 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 
 export default function App() {
   const dark = useThemeStore((s) => s.dark);
+  const p = palette(dark);
   useEffect(() => {
     document.documentElement.setAttribute('data-sp-dark', String(dark));
+    // 同一份调色板同时喂给 CSS 变量（global.css 里的 var() 引用见 theme/palette.ts）
+    applyThemeVars(dark);
   }, [dark]);
   return (
     <ErrorBoundary>
@@ -163,9 +168,10 @@ export default function App() {
       theme={{
         algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
         token: {
-          colorPrimary: '#2f54eb',
+          // 种子色固定：暗色的实际色阶由 antd darkAlgorithm 派生，不随调色板档位变
+          colorPrimary: p.brandSeed,
           borderRadius: 8,
-          colorBgLayout: dark ? '#0f1420' : '#f3f5f9',
+          colorBgLayout: p.page,
           // 统一字体栈：避免不同机器（Windows/Mac/答辩现场）字体跳变
           fontFamily:
             '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", ' +
@@ -173,19 +179,20 @@ export default function App() {
         },
         components: {
           Table: {
-            headerBg: dark ? '#1b2334' : '#fafbfd',
-            headerColor: dark ? '#9aa6bd' : '#5a6072',
-            rowHoverBg: dark ? '#1d2942' : '#eef3ff',
+            headerBg: p.surfaceAlt,
+            headerColor: p.textMuted,
+            rowHoverBg: p.rowHover,
           },
           Card: { paddingLG: 20 },
           // 侧边栏背景由 AppLayout 以渐变自定义，Menu 透明以透出底色
           Menu: {
             darkItemBg: 'transparent',
             darkSubMenuItemBg: 'transparent',
-            darkItemSelectedBg: 'rgba(47,84,235,.95)',
+            // 侧边栏永远是深色，配色固定取浅色档的品牌种子（与改造前一致）
+            darkItemSelectedBg: `rgba(${p.brandSeedRgb},.95)`,
             darkItemHoverBg: 'rgba(255,255,255,.09)',
             darkItemColor: 'rgba(255,255,255,.72)',
-            darkItemSelectedColor: '#fff',
+            darkItemSelectedColor: p.onBrand,
             itemMarginInline: 10,
           },
         },

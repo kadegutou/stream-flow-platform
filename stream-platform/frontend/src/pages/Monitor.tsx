@@ -11,6 +11,7 @@ import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
 import { AnimatedNumber } from '../components/AnimatedNumber';
 import { useThemeStore } from '../store/theme';
+import { palette } from '../theme/palette';
 
 /** 渐变指标卡（监控大盘风格） */
 function MetricCard({
@@ -34,7 +35,7 @@ function MetricCard({
         borderRadius: 12,
         padding: '16px 20px',
         background: gradient,
-        color: '#fff',
+        color: '#fff', // 渐变卡恒为深色底，白字固定
         boxShadow: '0 4px 14px rgba(31,45,61,.14)',
       }}
     >
@@ -73,6 +74,7 @@ function MiniLineChart({
   height?: number;
 }) {
   const dark = useThemeStore((s) => s.dark);
+  const p = palette(dark);
   if (data.length === 0) {
     return <Typography.Text type="secondary">暂无采样数据</Typography.Text>;
   }
@@ -89,10 +91,10 @@ function MiniLineChart({
   const lastX = pts.length > 1 ? pts[pts.length - 1][0] : padX;
   const areaPath = `M ${padX},${height - padBottom} L ${points.replace(/ /g, ' L ')} L ${lastX},${height - padBottom} Z`;
 
-  const line = dark ? '#5b8cff' : '#2f54eb';
-  const axis = dark ? 'rgba(255,255,255,.07)' : 'rgba(20,30,48,.07)';
-  // 原 #98a0b0 在白底只有 2.54:1，投影后基本看不清
-  const label = dark ? '#8b96ad' : '#6b7280';
+  const line = p.accent;
+  const axis = dark ? `rgba(${p.whiteRgb},.07)` : `rgba(${p.inkRgb},.07)`;
+  // 原 #98a0b0 在白底只有 2.54:1，投影后基本看不清（现走 textSubtle）
+  const label = p.textSubtle;
   const firstTime = times[0] ? dayjs(times[0]).format('HH:mm:ss') : null;
   const lastTime = times.length > 1 ? dayjs(times[times.length - 1]).format('HH:mm:ss') : null;
 
@@ -104,7 +106,7 @@ function MiniLineChart({
       style={{
         width: '100%',
         height: 'auto',
-        background: dark ? '#161d2e' : '#fafbfd',
+        background: p.chart,
         borderRadius: 10,
         display: 'block',
       }}
@@ -130,7 +132,7 @@ function MiniLineChart({
       <path d={areaPath} fill="url(#sp-chart-fill)" stroke="none" />
       <polyline points={points} fill="none" stroke={line} strokeWidth={2} strokeLinejoin="round" />
       {pts.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={3} fill={line} stroke={dark ? '#161d2e' : '#fff'} strokeWidth={1.5} />
+        <circle key={i} cx={x} cy={y} r={3} fill={line} stroke={p.chart} strokeWidth={1.5} />
       ))}
       <text x={padX} y={14} fontSize={11} fill={label}>
         峰值 {max.toLocaleString()} 行/s
@@ -153,6 +155,8 @@ function MiniLineChart({
 }
 
 export default function Monitor() {
+  const dark = useThemeStore((s) => s.dark);
+  const p = palette(dark);
   const [instances, setInstances] = useState<JobInstance[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -329,12 +333,13 @@ export default function Monitor() {
             value={latestMetric?.rowsPerSec ?? 0}
             suffix="行/s"
             icon={<RiseOutlined />}
-            gradient="linear-gradient(135deg, #2f54eb 0%, #5b8cff 100%)"
+            gradient={p.accentGradient}
           />
           <MetricCard
             title="累计行数"
             value={latestMetric?.totalRows ?? metricsInstance?.totalRows ?? 0}
             icon={<DatabaseOutlined />}
+            // 指标卡渐变是恒定的深色底（不随明暗切换），保留字面量
             gradient="linear-gradient(135deg, #389e0d 0%, #6fce62 100%)"
           />
           <MetricCard

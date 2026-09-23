@@ -1,5 +1,6 @@
 import { useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
+import { palette } from '../theme/palette';
 
 /**
  * 侧栏折叠按钮的浮出逻辑：鼠标靠近容器右边缘中部时才显示按钮。
@@ -34,6 +35,7 @@ export function EdgeCollapseButton({
   dark: boolean;
   label: string;
 }) {
+  const p = palette(dark);
   return (
     <button
       type="button"
@@ -51,16 +53,16 @@ export function EdgeCollapseButton({
         height: 60,
         padding: 0,
         borderRadius: '0 26px 26px 0',
-        background: dark ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.92)',
-        border: `1px solid ${dark ? 'rgba(255,255,255,.16)' : 'rgba(20,30,48,.1)'}`,
+        background: dark ? `rgba(${p.whiteRgb},.14)` : `rgba(${p.whiteRgb},.92)`,
+        border: `1px solid ${dark ? `rgba(${p.whiteRgb},.16)` : `rgba(${p.inkRgb},.1)`}`,
         borderLeft: 'none',
-        boxShadow: dark ? 'none' : '0 2px 8px rgba(20,30,48,.12)',
+        boxShadow: dark ? 'none' : `0 2px 8px rgba(${p.inkRgb},.12)`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
         zIndex: 20,
-        color: dark ? 'rgba(255,255,255,.75)' : '#5a6072',
+        color: dark ? `rgba(${p.whiteRgb},.75)` : p.textMuted,
         fontSize: 11,
         userSelect: 'none',
         transition: 'background .2s, color .2s',

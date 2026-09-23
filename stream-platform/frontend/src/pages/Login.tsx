@@ -13,6 +13,13 @@ import { login, register } from '../api/auth';
 import { showApiError } from '../api/request';
 import { appMessage } from '../utils/antdApp';
 import { useAuthStore } from '../store/auth';
+import { palette } from '../theme/palette';
+
+/**
+ * 登录页外观固定为深色（不随全局主题切换），因此直接取暗色档调色板。
+ * 模块级取一次即可，不需要跟随主题变化。
+ */
+const LOGIN = palette(true);
 
 const FEATURES = [
   { icon: <ApartmentOutlined />, text: '拖拽式数据流编排，20 种内置控件' },
@@ -43,10 +50,10 @@ function FlowBackground() {
     >
       <defs>
         <linearGradient id="sp-flow-grad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#5b8cff" stopOpacity="0" />
-          <stop offset="45%" stopColor="#7aa5ff" stopOpacity="0.85" />
-          <stop offset="55%" stopColor="#5b8cff" stopOpacity="0.85" />
-          <stop offset="100%" stopColor="#2f54eb" stopOpacity="0" />
+          <stop offset="0%" stopColor={LOGIN.accent} stopOpacity="0" />
+          <stop offset="45%" stopColor={LOGIN.accentStrong} stopOpacity="0.85" />
+          <stop offset="55%" stopColor={LOGIN.accent} stopOpacity="0.85" />
+          <stop offset="100%" stopColor={LOGIN.brandSeed} stopOpacity="0" />
         </linearGradient>
       </defs>
       {paths.map((d, i) => (
@@ -109,9 +116,9 @@ export default function Login() {
         justifyContent: 'center',
         overflow: 'hidden',
         background:
-          'radial-gradient(ellipse at 20% 30%, rgba(47,84,235,.35) 0%, transparent 50%),' +
-          'radial-gradient(ellipse at 80% 70%, rgba(82,196,26,.18) 0%, transparent 50%),' +
-          'linear-gradient(135deg, #141e30 0%, #243b55 100%)',
+          `radial-gradient(ellipse at 20% 30%, rgba(${LOGIN.brandSeedRgb},.35) 0%, transparent 50%),` +
+          `radial-gradient(ellipse at 80% 70%, rgba(${LOGIN.successRgb},.18) 0%, transparent 50%),` +
+          LOGIN.brandDeepGradientDiagonal,
       }}
     >
       <FlowBackground />
@@ -127,19 +134,19 @@ export default function Login() {
         }}
       >
         {/* 左侧品牌区 */}
-        <div style={{ color: '#fff', maxWidth: 420 }}>
+      <div style={{ color: LOGIN.onBrand, maxWidth: 420 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
             <span
               style={{
                 width: 44,
                 height: 44,
                 borderRadius: 12,
-                background: 'linear-gradient(135deg, #2f54eb 0%, #5b8cff 100%)',
+                background: LOGIN.accentGradient,
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: 22,
-                boxShadow: '0 6px 20px rgba(47,84,235,.5)',
+                boxShadow: `0 6px 20px rgba(${LOGIN.brandSeedRgb},.5)`,
                 flexShrink: 0,
               }}
             >
@@ -149,7 +156,7 @@ export default function Login() {
               style={{
                 fontSize: 12,
                 letterSpacing: 2.5,
-                color: 'rgba(255,255,255,.5)',
+                color: `rgba(${LOGIN.whiteRgb},.5)`,
                 textTransform: 'uppercase',
               }}
             >
@@ -162,7 +169,7 @@ export default function Login() {
             <br />
             任务管理平台
           </div>
-          <div style={{ marginTop: 12, fontSize: 14, color: 'rgba(255,255,255,.65)', lineHeight: 1.8 }}>
+          <div style={{ marginTop: 12, fontSize: 14, color: `rgba(${LOGIN.whiteRgb},.65)`, lineHeight: 1.8 }}>
             面向流量接入、字段补数、格式转换、多路转发场景，
             拖拉拽编排数据治理作业，一键上线持续处理。
           </div>
@@ -175,7 +182,7 @@ export default function Login() {
                   alignItems: 'center',
                   gap: 12,
                   marginTop: 14,
-                  color: 'rgba(255,255,255,.85)',
+                  color: `rgba(${LOGIN.whiteRgb},.85)`,
                   fontSize: 14,
                 }}
               >
@@ -184,7 +191,7 @@ export default function Login() {
                     width: 32,
                     height: 32,
                     borderRadius: 8,
-                    background: 'rgba(255,255,255,.12)',
+                    background: `rgba(${LOGIN.whiteRgb},.12)`,
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -204,16 +211,16 @@ export default function Login() {
         <ConfigProvider
           theme={{
             algorithm: antdTheme.darkAlgorithm,
-            token: { colorPrimary: '#5b8cff', borderRadius: 8 },
+            token: { colorPrimary: LOGIN.accent, borderRadius: 8 },
             components: {
               Input: {
-                colorBgContainer: 'rgba(255,255,255,.08)',
-                colorBorder: 'rgba(122,165,255,.28)',
-                colorText: '#e8ecf5',
-                colorTextPlaceholder: 'rgba(255,255,255,.35)',
-                colorIcon: 'rgba(255,255,255,.45)',
-                activeBorderColor: '#5b8cff',
-                hoverBorderColor: '#5b8cff',
+                colorBgContainer: `rgba(${LOGIN.whiteRgb},.08)`,
+                colorBorder: `rgba(${LOGIN.accentLightRgb},.28)`,
+                colorText: LOGIN.textOnDeep,
+                colorTextPlaceholder: `rgba(${LOGIN.whiteRgb},.35)`,
+                colorIcon: `rgba(${LOGIN.whiteRgb},.45)`,
+                activeBorderColor: LOGIN.accent,
+                hoverBorderColor: LOGIN.accent,
               },
             },
           }}
@@ -222,18 +229,18 @@ export default function Login() {
           style={{
             width: 380,
             borderRadius: 16,
-            background: 'rgba(20,30,48,.55)',
+            background: `rgba(${LOGIN.inkRgb},.55)`,
             backdropFilter: 'blur(14px)',
-            border: '1px solid rgba(122,165,255,.22)',
+            border: `1px solid rgba(${LOGIN.accentLightRgb},.22)`,
             boxShadow: '0 20px 56px rgba(0,0,0,.45)',
           }}
           styles={{ body: { padding: '28px 28px 24px' } }}
         >
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#e8ecf5' }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: LOGIN.textOnDeep }}>
               {tab === 'login' ? '欢迎登录' : '注册账号'}
             </div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: `rgba(${LOGIN.whiteRgb},.4)`, marginTop: 4 }}>
               Stream Processing Platform
             </div>
           </div>
@@ -257,8 +264,8 @@ export default function Login() {
                   fontSize: 14,
                   fontWeight: tab === t ? 700 : 400,
                   // 未选中项原为 rgba(255,255,255,.45)，在深色玻璃卡上偏灰；提到 .62
-                  color: tab === t ? '#5b8cff' : 'rgba(255,255,255,.62)',
-                  borderBottom: tab === t ? '2px solid #5b8cff' : '2px solid transparent',
+                  color: tab === t ? LOGIN.accent : `rgba(${LOGIN.whiteRgb},.62)`,
+                  borderBottom: tab === t ? `2px solid ${LOGIN.accent}` : '2px solid transparent',
                   borderRadius: 0,
                   paddingBottom: 4,
                   transition: 'all 0.25s',
@@ -286,9 +293,9 @@ export default function Login() {
                   height: 44,
                   fontWeight: 600,
                   letterSpacing: 4,
-                  background: 'linear-gradient(135deg, #2f54eb 0%, #5b8cff 100%)',
+                  background: LOGIN.accentGradient,
                   border: 'none',
-                  boxShadow: '0 6px 18px rgba(47,84,235,.35)',
+                  boxShadow: `0 6px 18px rgba(${LOGIN.brandSeedRgb},.35)`,
                 }}
               >
                 登 录
@@ -316,9 +323,9 @@ export default function Login() {
                   height: 44,
                   fontWeight: 600,
                   letterSpacing: 4,
-                  background: 'linear-gradient(135deg, #2f54eb 0%, #5b8cff 100%)',
+                  background: LOGIN.accentGradient,
                   border: 'none',
-                  boxShadow: '0 6px 18px rgba(47,84,235,.35)',
+                  boxShadow: `0 6px 18px rgba(${LOGIN.brandSeedRgb},.35)`,
                 }}
               >
                 注 册

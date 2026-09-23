@@ -1,23 +1,17 @@
 import type { ComponentCategory } from '../types';
+import { palette } from './palette';
 
 /**
  * 控件分类（输入/处理/输出）的语义色与底色。
  *
  * 单独成模块而不是塞在 CategoryTag.tsx 里：调色板是「数据」，组件是「视图」，
- * 画布、小地图、控件面板都要用同一套色值，放这里避免组件文件同时导出常量与组件
- * （也会让 Fast Refresh 失效）。
+ * 画布、小地图、控件面板都要用同一套色值。色值本身来自 `theme/palette.ts`：
+ * 分类用 500 档、状态用 600 档（同色相、不同明度），避免"这个绿是输入还是运行中"的歧义。
  */
-const CATEGORY_HEX: Record<ComponentCategory, string> = {
-  SOURCE: '#52c41a',
-  PROCESS: '#2f54eb',
-  SINK: '#fa8c16',
-};
-
-/** 暗色模式下用亮一档，避免深色底上对比度不足 */
-const CATEGORY_HEX_DARK: Record<ComponentCategory, string> = {
-  SOURCE: '#73d13d',
-  PROCESS: '#5b8cff',
-  SINK: '#ffa940',
+const CATEGORY_TONE: Record<ComponentCategory, 'success' | 'accent' | 'warning'> = {
+  SOURCE: 'success',
+  PROCESS: 'accent',
+  SINK: 'warning',
 };
 
 /**
@@ -41,7 +35,7 @@ export const CATEGORY_LABEL: Record<ComponentCategory, string> = {
  * 浅色 PROCESS #2f54eb 放在暗色节点上只有 2.68:1，暗色变体 #5b8cff 是 4.97:1。
  */
 export function categoryColor(category: ComponentCategory, dark: boolean): string {
-  return (dark ? CATEGORY_HEX_DARK : CATEGORY_HEX)[category];
+  return palette(dark)[CATEGORY_TONE[category]];
 }
 
 /** 取分类底色（画布节点色条） */
