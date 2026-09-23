@@ -173,7 +173,7 @@ export default function Jobs() {
       <Space style={{ marginBottom: 12 }} wrap>
         <Input
           allowClear
-          prefix={<SearchOutlined style={{ color: '#b6bdd0' }} />}
+          prefix={<SearchOutlined style={{ color: '#8c93a3' }} />}
           placeholder="搜索作业名称 / 描述"
           style={{ width: 240 }}
           value={keyword}

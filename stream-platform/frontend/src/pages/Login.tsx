@@ -247,21 +247,25 @@ export default function Login() {
             }}
           >
             {(['login', 'register'] as const).map((t) => (
-              <span
+              <button
                 key={t}
+                type="button"
+                className="sp-link-button"
                 onClick={() => setTab(t)}
+                aria-pressed={tab === t}
                 style={{
-                  cursor: 'pointer',
                   fontSize: 14,
                   fontWeight: tab === t ? 700 : 400,
-                  color: tab === t ? '#5b8cff' : 'rgba(255,255,255,.45)',
+                  // 未选中项原为 rgba(255,255,255,.45)，在深色玻璃卡上偏灰；提到 .62
+                  color: tab === t ? '#5b8cff' : 'rgba(255,255,255,.62)',
                   borderBottom: tab === t ? '2px solid #5b8cff' : '2px solid transparent',
+                  borderRadius: 0,
                   paddingBottom: 4,
                   transition: 'all 0.25s',
                 }}
               >
                 {t === 'login' ? '登录' : '注册'}
-              </span>
+              </button>
             ))}
           </div>
           {tab === 'login' ? (

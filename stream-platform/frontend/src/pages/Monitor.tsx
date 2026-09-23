@@ -58,31 +58,56 @@ function MetricCard({
   );
 }
 
-/** 简单 SVG 迷你折线图（不引重型图表库）：渐变面积填充 + 明暗自适应 */
-function MiniLineChart({ data, width = 560, height = 160 }: { data: number[]; width?: number; height?: number }) {
+/**
+ * 简单 SVG 迷你折线图（不引重型图表库）：渐变面积填充 + 明暗自适应。
+ * 用 viewBox 自适应容器宽度——原先固定 width=560，抽屉在窄屏或字号放大后会横向溢出；
+ * 同时补上首尾时间刻度与采样点数，否则整张图只有"峰值"一行字，更像插画而不是图表。
+ */
+function MiniLineChart({
+  data,
+  times = [],
+  height = 170,
+}: {
+  data: number[];
+  times?: string[];
+  height?: number;
+}) {
   const dark = useThemeStore((s) => s.dark);
   if (data.length === 0) {
     return <Typography.Text type="secondary">暂无采样数据</Typography.Text>;
   }
+  const W = 560;
   const max = Math.max(...data, 1);
-  const padding = 16;
-  const stepX = data.length > 1 ? (width - padding * 2) / (data.length - 1) : 0;
-  const yOf = (v: number) => height - padding - (v / max) * (height - padding * 2);
-  const pts = data.map((v, i) => [padding + i * stepX, yOf(v)] as const);
-  const points = pts.map(([x, y]) => `${x},${y}`).join(' ');
+  const padX = 18;
+  const padTop = 22;
+  const padBottom = 28; // 给底部时间刻度留位置
+  const stepX = data.length > 1 ? (W - padX * 2) / (data.length - 1) : 0;
+  const yOf = (v: number) => height - padBottom - (v / max) * (height - padTop - padBottom);
+  const pts = data.map((v, i) => [padX + i * stepX, yOf(v)] as const);
+  const points = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
   // 折线下方围出的面积，用于渐变填充
-  const lastX = pts.length > 1 ? pts[pts.length - 1][0] : padding;
-  const areaPath = `M ${padding},${height - padding} L ${points.replace(/ /g, ' L ')} L ${lastX},${height - padding} Z`;
+  const lastX = pts.length > 1 ? pts[pts.length - 1][0] : padX;
+  const areaPath = `M ${padX},${height - padBottom} L ${points.replace(/ /g, ' L ')} L ${lastX},${height - padBottom} Z`;
 
   const line = dark ? '#5b8cff' : '#2f54eb';
   const axis = dark ? 'rgba(255,255,255,.07)' : 'rgba(20,30,48,.07)';
-  const label = dark ? '#8b96ad' : '#98a0b0';
+  // 原 #98a0b0 在白底只有 2.54:1，投影后基本看不清
+  const label = dark ? '#8b96ad' : '#6b7280';
+  const firstTime = times[0] ? dayjs(times[0]).format('HH:mm:ss') : null;
+  const lastTime = times.length > 1 ? dayjs(times[times.length - 1]).format('HH:mm:ss') : null;
 
   return (
     <svg
-      width={width}
-      height={height}
-      style={{ background: dark ? '#161d2e' : '#fafbfd', borderRadius: 10, display: 'block' }}
+      viewBox={`0 0 ${W} ${height}`}
+      role="img"
+      aria-label={`吞吐折线图：峰值 ${max.toLocaleString()} 行/秒，共 ${data.length} 个采样点`}
+      style={{
+        width: '100%',
+        height: 'auto',
+        background: dark ? '#161d2e' : '#fafbfd',
+        borderRadius: 10,
+        display: 'block',
+      }}
     >
       <defs>
         <linearGradient id="sp-chart-fill" x1="0" y1="0" x2="0" y2="1">
@@ -94,10 +119,10 @@ function MiniLineChart({ data, width = 560, height = 160 }: { data: number[]; wi
       {[0.25, 0.5, 0.75].map((r) => (
         <line
           key={r}
-          x1={padding}
-          x2={width - padding}
-          y1={padding + r * (height - padding * 2)}
-          y2={padding + r * (height - padding * 2)}
+          x1={padX}
+          x2={W - padX}
+          y1={padTop + r * (height - padTop - padBottom)}
+          y2={padTop + r * (height - padTop - padBottom)}
           stroke={axis}
           strokeDasharray="3 5"
         />
@@ -107,9 +132,22 @@ function MiniLineChart({ data, width = 560, height = 160 }: { data: number[]; wi
       {pts.map(([x, y], i) => (
         <circle key={i} cx={x} cy={y} r={3} fill={line} stroke={dark ? '#161d2e' : '#fff'} strokeWidth={1.5} />
       ))}
-      <text x={padding} y={padding - 4} fontSize={11} fill={label}>
+      <text x={padX} y={14} fontSize={11} fill={label}>
         峰值 {max.toLocaleString()} 行/s
       </text>
+      <text x={W - padX} y={14} fontSize={11} fill={label} textAnchor="end">
+        {data.length} 个采样点
+      </text>
+      {firstTime && (
+        <text x={padX} y={height - 8} fontSize={11} fill={label}>
+          {firstTime}
+        </text>
+      )}
+      {lastTime && (
+        <text x={W - padX} y={height - 8} fontSize={11} fill={label} textAnchor="end">
+          {lastTime}
+        </text>
+      )}
     </svg>
   );
 }
@@ -306,7 +344,7 @@ export default function Monitor() {
             gradient="linear-gradient(135deg, #d46b08 0%, #ffa940 100%)"
           />
         </div>
-        <MiniLineChart data={metrics.map((m) => m.rowsPerSec)} />
+        <MiniLineChart data={metrics.map((m) => m.rowsPerSec)} times={metrics.map((m) => m.sampledAt)} />
         <Table<JobMetric>
           style={{ marginTop: 16 }}
           rowKey="sampledAt"

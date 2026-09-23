@@ -4,7 +4,8 @@ import { AppstoreOutlined } from '@ant-design/icons';
 import { listComponents } from '../api/components';
 import { showApiError } from '../api/request';
 import type { ComponentDef, ComponentCategory } from '../types';
-import { CategoryTag, CATEGORY_LABEL } from '../components/CategoryTag';
+import { CategoryTag } from '../components/CategoryTag';
+import { CATEGORY_LABEL } from '../theme/category';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
 

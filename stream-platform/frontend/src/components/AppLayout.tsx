@@ -61,12 +61,13 @@ export default function AppLayout() {
     ? [
         {
           title: (
-            <span
+            <button
+              type="button"
+              className="sp-link-button"
               onClick={() => transitionTo('/jobs')}
-              style={{ cursor: 'pointer', color: 'inherit' }}
             >
               作业管理
-            </span>
+            </button>
           ),
         },
         { title: '编辑画布' },
@@ -191,7 +192,7 @@ export default function AppLayout() {
                 aria-live="polite"
                 style={{
                   fontSize: 11,
-                  color: dark ? '#666' : '#999',
+                  color: dark ? '#8b96ad' : '#6b7280',
                   minWidth: 32,
                   textAlign: 'center',
                   userSelect: 'none',
@@ -227,7 +228,11 @@ export default function AppLayout() {
               <Space style={{ cursor: 'pointer', color: dark ? '#d5dbea' : undefined }}>
                 <Avatar icon={<UserOutlined />} />
                 <span>{nickname || '用户'}</span>
-                {role && <span style={{ color: '#999', fontSize: 12 }}>({role === 'ADMIN' ? '管理员' : '普通用户'})</span>}
+                {role && (
+                  <span style={{ color: dark ? '#8b96ad' : '#6b7280', fontSize: 12 }}>
+                    ({role === 'ADMIN' ? '管理员' : '普通用户'})
+                  </span>
+                )}
               </Space>
             </Dropdown>
           </Space>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouteTransition } from '../components/RouteTransition';
 import { useThemeStore } from '../store/theme';
+import { prefersReducedMotion, usePrefersReducedMotion } from '../utils/motion';
 import {
   UnorderedListOutlined,
   AppstoreOutlined,
@@ -13,21 +14,26 @@ const QUICK_LINKS = [
   { path: '/jobs', icon: <UnorderedListOutlined />, label: '作业管理', desc: '编排与调度流处理作业' },
   { path: '/components', icon: <AppstoreOutlined />, label: '控件列表', desc: '20+ 种数据处理控件' },
   { path: '/monitor', icon: <MonitorOutlined />, label: '运行监控', desc: '实时指标与集群状态' },
-  { path: '/jobs', icon: <EditOutlined />, label: '编辑画布', desc: '可视化 DAG 编排' },
+  { path: '/jobs', icon: <EditOutlined />, label: '编辑画布', desc: '从作业列表进入画布' },
 ];
 
-/** 模拟日志行 */
+/**
+ * 首页滚动的日志行（演示样例）。
+ * 文案刻意只写平台真实具备的能力：源/汇为 CSV/Excel/JDBC/Kafka/HDFS，处理为字段拼接、
+ * 字段映射、XML↔JSON、Redis 补数、数据脱敏，引擎侧是有界队列背压、分片派发、断点续传、fencing。
+ * 不要再写 ClickHouse / JOIN 维表 / 窗口聚合这类本平台没有的能力——评委第一屏就会看到这段。
+ */
 const LOG_POOL = [
-  '> [source] Kafka 消费 5,000 行... OK',
-  '> [transform] 数据清洗完成，过滤 12 条异常',
-  '> [transform] 字段映射 id→user_id, ts→event_time',
-  '> [sink] 写入 ClickHouse 5,000 行... OK',
-  '> [source] CSV 读取批次 #47... OK',
-  '> [transform] 聚合窗口 10s，触发计算',
-  '> [sink] MySQL 批量插入 3,200 行... OK',
-  '> [source] 断点续传偏移量 1,250,000',
-  '> [transform] JOIN 维表命中率 98.7%',
-  '> [sink] 扇出双写一致性校验通过',
+  '> [source] CSV 分片 #2 读取 64MB，行边界对齐... OK',
+  '> [transform] 字段拼接 name + city → full_name',
+  '> [sink] MySQL 批量插入 5,000 行... OK',
+  '> [source] Kafka 分区 p3 消费 12,400 行... OK',
+  '> [transform] Redis 补数命中 5,000 / 5,000 条',
+  '> [sink] 扇出双写 CSV + HDFS 各 1,000,000 行，行数一致',
+  '> [source] 断点续传：从字节偏移 12,582,912 继续',
+  '> [transform] 数据脱敏：手机号 5,000 条掩码完成',
+  '> [engine] 有界队列水位 38 / 64，背压生效',
+  '> [engine] 分片 shard-3 派发至 worker-02',
 ];
 
 /* ========== 动态拓扑图 ========== */
@@ -152,7 +158,11 @@ function randomThroughput(): string {
   return THROUGHPUTS[Math.floor(Math.random() * THROUGHPUTS.length)];
 }
 
-function generateTopology(w: number, h: number): { nodes: TopoNode[]; edges: TopoEdge[] } {
+function generateTopology(
+  w: number,
+  h: number,
+  initialOpacity = 0,
+): { nodes: TopoNode[]; edges: TopoEdge[] } {
   const nodes: TopoNode[] = [];
   const edges: TopoEdge[] = [];
 
@@ -194,7 +204,8 @@ function generateTopology(w: number, h: number): { nodes: TopoNode[]; edges: Top
     }
   }
 
-  return { nodes, edges };
+  // 关闭动画时直接以完全不透明起步（否则会一直停在 opacity 0，整张图不可见）
+  return { nodes: nodes.map((n) => ({ ...n, opacity: initialOpacity })), edges };
 }
 
 /** 贝塞尔曲线路径 */
@@ -208,7 +219,9 @@ function curvePath(x1: number, y1: number, x2: number, y2: number): string {
 /** 拓扑图组件 */
 function TopoGraph({ dark }: { dark: boolean }) {
   const W = 900, H = 320;
-  const [topo, setTopo] = useState(() => generateTopology(W, H));
+  const reduced = usePrefersReducedMotion();
+  // 关闭动画时节点直接以完全不透明起步，避免一直停在 opacity 0（节点不可见）
+  const [topo, setTopo] = useState(() => generateTopology(W, H, prefersReducedMotion() ? 1 : 0));
   const [selected, setSelected] = useState<number | null>(null);
   const [hoverEdge, setHoverEdge] = useState<number | null>(null);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -228,6 +241,8 @@ function TopoGraph({ dark }: { dark: boolean }) {
 
   // 节点生灭循环：严格交替（消失→生成→消失→生成...），时间随机
   useEffect(() => {
+    // 系统开启「减少动态效果」时不做节点生灭循环
+    if (reduced) return;
     let alive = true;
     let lastWasRemove = false; // 上次是否是消失，保证交替
 
@@ -325,10 +340,11 @@ function TopoGraph({ dark }: { dark: boolean }) {
       alive = false;
       clearTimers();
     };
-  }, []);
+  }, [reduced]);
 
   // 节点淡入淡出动画帧
   useEffect(() => {
+    if (reduced) return; // 静态展示（初始 opacity 已由 prefersReducedMotion 决定）
     let raf: number;
     const animate = () => {
       setTopo((prev) => {
@@ -348,7 +364,7 @@ function TopoGraph({ dark }: { dark: boolean }) {
     };
     raf = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [reduced]);
 
   // 获取与选中节点相连的边和节点集合
   const getConnected = useCallback(
@@ -558,13 +574,70 @@ function Particles({ dark }: { dark: boolean }) {
 
 /* ========== 首页组件 ========== */
 
+/**
+ * 快捷入口卡片。
+ * 原先用 <div onClick> + onMouseEnter 直接改 DOM 样式：键盘不可达，hover 阴影把暗色值写死在 JSX。
+ * 现在换成原生 button，hover 由 .sp-quick-card 的 CSS 变量驱动（见 global.css）。
+ */
+function QuickCard({
+  icon,
+  label,
+  desc,
+  onClick,
+  dark,
+  accentColor,
+  textPrimary,
+  textSecondary,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  desc: string;
+  onClick: () => void;
+  dark: boolean;
+  accentColor: string;
+  textPrimary: string;
+  textSecondary: string;
+}) {
+  return (
+    <button
+      type="button"
+      className="sp-quick-card"
+      onClick={onClick}
+      style={{
+        background: dark ? '#0d1822' : '#fff',
+        border: `1px solid ${dark ? 'rgba(62,207,192,.22)' : 'rgba(124,58,237,.14)'}`,
+        borderRadius: 10,
+        padding: '20px 16px',
+        cursor: 'pointer',
+        textAlign: 'center',
+        font: 'inherit',
+        ['--sp-quick-border-hover' as string]: dark
+          ? 'rgba(62,207,192,.55)'
+          : 'rgba(124,58,237,.45)',
+        ['--sp-quick-shadow-hover' as string]: dark
+          ? '0 4px 20px rgba(46,232,160,.15)'
+          : '0 4px 20px rgba(124,58,237,.12)',
+      }}
+    >
+      <div style={{ fontSize: 24, color: accentColor, marginBottom: 8 }}>{icon}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: textPrimary, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 12, color: textSecondary }}>{desc}</div>
+    </button>
+  );
+}
+
 export default function Home() {
   const { transitionTo } = useRouteTransition();
   const dark = useThemeStore((s) => s.dark);
-  const [logs, setLogs] = useState<string[]>([]);
+  const reduced = usePrefersReducedMotion();
+  const [logs, setLogs] = useState<string[]>(() =>
+    // 开启「减少动态效果」时不滚动，直接展示前几行静态日志
+    prefersReducedMotion() ? LOG_POOL.slice(0, 6) : [],
+  );
   const logIdx = useRef(0);
 
   useEffect(() => {
+    if (reduced) return; // 静态日志已由初始 state 决定
     const timer = setInterval(() => {
       setLogs((prev) => {
         const next = [...prev, LOG_POOL[logIdx.current % LOG_POOL.length]];
@@ -573,12 +646,9 @@ export default function Home() {
       });
     }, 1800);
     return () => clearInterval(timer);
-  }, []);
+  }, [reduced]);
 
   const bgColor = dark ? '#050a10' : '#dde3ec';
-  const cardBg = dark ? '#0d1822' : '#fff';
-  const cardBorder = dark ? 'rgba(62,207,192,.22)' : 'rgba(124,58,237,.14)';
-  const cardHoverBorder = dark ? 'rgba(62,207,192,.55)' : 'rgba(124,58,237,.45)';
   const textPrimary = dark ? '#f4faf8' : '#1a2332';
   const textSecondary = dark ? '#6ab8ac' : '#6a4a9e';
   const accentColor = dark ? '#3ecfc0' : '#7c3aed';
@@ -606,7 +676,7 @@ export default function Home() {
       <div
         style={{
           fontFamily: 'ui-monospace, monospace',
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: 700,
           letterSpacing: 2,
           color: textSecondary,
@@ -651,7 +721,23 @@ export default function Home() {
         <TopoGraph dark={dark} />
       </div>
 
-      {/* 滚动日志 */}
+      {/* 滚动日志（演示样例：文案只写平台真实具备的能力） */}
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 640,
+          fontFamily: 'ui-monospace, monospace',
+          fontSize: 12,
+          letterSpacing: 1,
+          color: textSecondary,
+          opacity: 0.8,
+          marginBottom: 6,
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        DEMO OUTPUT / 演示样例
+      </div>
       <div
         style={{
           width: '100%',
@@ -687,37 +773,17 @@ export default function Home() {
         }}
       >
         {QUICK_LINKS.map((link) => (
-          <div
+          <QuickCard
             key={link.label}
+            icon={link.icon}
+            label={link.label}
+            desc={link.desc}
             onClick={() => transitionTo(link.path)}
-            style={{
-              background: cardBg,
-              border: `1px solid ${cardBorder}`,
-              borderRadius: 10,
-              padding: '20px 16px',
-              cursor: 'pointer',
-              transition: 'all 0.25s',
-              textAlign: 'center',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-3px)';
-              e.currentTarget.style.borderColor = cardHoverBorder;
-              e.currentTarget.style.boxShadow = dark
-                ? '0 4px 20px rgba(46,232,160,.15)'
-                : '0 4px 20px rgba(124,58,237,.12)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.borderColor = cardBorder;
-              e.currentTarget.style.boxShadow = 'none';
-            }}
-          >
-            <div style={{ fontSize: 24, color: accentColor, marginBottom: 8 }}>{link.icon}</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: textPrimary, marginBottom: 4 }}>
-              {link.label}
-            </div>
-            <div style={{ fontSize: 11, color: textSecondary }}>{link.desc}</div>
-          </div>
+            dark={dark}
+            accentColor={accentColor}
+            textPrimary={textPrimary}
+            textSecondary={textSecondary}
+          />
         ))}
       </div>
     </div>

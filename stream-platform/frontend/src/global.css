@@ -2,7 +2,36 @@
 
 /* 键盘可达性：原生按钮形态的图标操作统一可见焦点环 */
 .sp-edge-toggle:focus-visible,
-.sp-icon-action:focus-visible {
+.sp-icon-action:focus-visible,
+.sp-quick-card:focus-visible {
+  outline: 2px solid #2f54eb;
+  outline-offset: 2px;
+}
+
+/*
+ * 首页快捷入口卡片：hover 交给 CSS 变量驱动。
+ * 原先在 onMouseEnter 里直接改 DOM 样式，绕开 React 且把暗色阴影值写死在 JSX 里。
+ */
+.sp-quick-card {
+  transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s;
+}
+.sp-quick-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--sp-quick-border-hover);
+  box-shadow: var(--sp-quick-shadow-hover);
+}
+
+/* 链接样式的原生按钮（面包屑等）：保留文字外观，同时可聚焦、可回车触发 */
+.sp-link-button {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.sp-link-button:focus-visible {
   outline: 2px solid #2f54eb;
   outline-offset: 2px;
 }
@@ -551,7 +580,12 @@ html[data-sp-dark='true'] .sp-content .ant-card {
 @media (prefers-reduced-motion: reduce) {
   .sp-page-enter,
   .sp-pulse-dot,
-  .sp-flow-line {
+  .sp-flow-line,
+  .sp-quick-card,
+  /* 路由转场与登录/退场动画：JS 侧也会跳过转场，这里保证不漏网 */
+  .sp-route-transition,
+  .sp-route-transition * {
     animation: none;
+    transition: none;
   }
 }

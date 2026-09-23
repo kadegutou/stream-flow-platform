@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { prefersReducedMotion } from '../utils/motion';
 
 /** 线条方向：左侧竖线 / 右侧竖线 / 顶部横线 / 底部横线 / 交叉 */
 type LineDir = 'left' | 'right' | 'top' | 'bottom' | 'cross';
@@ -43,7 +44,9 @@ export function useRouteTransition() {
 }
 
 const COVER_MS = 600;
-const REVEAL_MS = 800;
+// 普通路由转场原为 600 + 800 = 1.4s，切页显得迟钝；压缩到 380 + 520 = 0.9s
+const ROUTE_COVER_MS = 380;
+const ROUTE_REVEAL_MS = 520;
 const AUTH_REVEAL_MS = 400; // 登录/退出扫出更快
 const LOGIN_LOAD_MS = 2400;
 const LOGOUT_LOAD_MS = 1600;
@@ -90,6 +93,11 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const runRoute = useCallback(
     (target: string, opts?: { replace?: boolean }) => {
       clearAll();
+      // 系统开启「减少动态效果」时直接跳转，不播放遮罩转场
+      if (prefersReducedMotion()) {
+        navigate(target, { replace: opts?.replace });
+        return;
+      }
       const route = resolveRoute(target);
       setInfo({ kind: 'route', ...route });
       setPhase('leaving');
@@ -105,9 +113,9 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
             setTimeout(() => {
               setPhase('idle');
               setInfo(null);
-            }, REVEAL_MS),
+            }, ROUTE_REVEAL_MS),
           );
-        }, COVER_MS),
+        }, ROUTE_COVER_MS),
       );
     },
     [navigate],
@@ -116,6 +124,12 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
   const runLogin = useCallback(
     (target: string, onComplete?: () => void) => {
       clearAll();
+      // 减少动态效果：不播开屏动画，直接进入目标页
+      if (prefersReducedMotion()) {
+        navigate(target, { replace: true });
+        onComplete?.();
+        return;
+      }
       setInfo({ kind: 'login', no: 'SYS', title: '系统初始化', sub: 'BOOT / AUTHENTICATION VERIFIED', dir: 'left' });
       setPhase('leaving');
       setProgress(0);
@@ -175,6 +189,12 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
 
   const runLogout = useCallback((onCovered?: () => void, onComplete?: () => void) => {
     clearAll();
+    // 减少动态效果：不播退出动画，直接清登录态并提示
+    if (prefersReducedMotion()) {
+      onCovered?.();
+      onComplete?.();
+      return;
+    }
     setInfo({ kind: 'logout', no: 'SYS', title: '会话终止', sub: 'SHUTDOWN / SESSION CLOSED', dir: 'left' });
     setPhase('leaving');
     setProgress(0);

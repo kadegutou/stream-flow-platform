@@ -28,8 +28,9 @@ import { getJob, updateJob } from '../api/jobs';
 import { showApiError } from '../api/request';
 import { appMessage, appModal } from '../utils/antdApp';
 import { EdgeCollapseButton, useEdgeHover } from '../components/EdgeCollapseButton';
+import { usePrefersReducedMotion } from '../utils/motion';
 import type { ComponentCategory, ComponentDef, Dag, Job } from '../types';
-import { CATEGORY_HEX, CATEGORY_LABEL } from '../components/CategoryTag';
+import { CATEGORY_LABEL, categoryBg, categoryColor } from '../theme/category';
 import { ParamFormItems } from '../components/ParamFormItems';
 import {
   isNodeConfigured,
@@ -41,12 +42,6 @@ import {
 
 /* ---------- 画布节点数据 ---------- */
 
-const CATEGORY_BG: Record<ComponentCategory, string> = {
-  SOURCE: '#f6ffed',
-  PROCESS: '#f0f5ff',
-  SINK: '#fff7e6',
-};
-
 const CATEGORY_ICON: Record<ComponentCategory, React.ReactNode> = {
   SOURCE: <ImportOutlined />,
   PROCESS: <NodeExpandOutlined />,
@@ -56,7 +51,8 @@ const CATEGORY_ICON: Record<ComponentCategory, React.ReactNode> = {
 function ComponentNode(props: NodeProps<ComponentFlowNode>) {
   const dark = useThemeStore((s) => s.dark);
   const { data, selected } = props;
-  const color = CATEGORY_HEX[data.category];
+  const color = categoryColor(data.category, dark);
+  const bg = categoryBg(data.category, dark);
   return (
     <div
       style={{
@@ -64,7 +60,7 @@ function ComponentNode(props: NodeProps<ComponentFlowNode>) {
         alignItems: 'stretch',
         borderRadius: 10,
         background: dark ? '#1b2334' : '#fff',
-        minWidth: 168,
+        minWidth: 176,
         overflow: 'hidden',
         border: `1px solid ${selected ? color : dark ? '#2c3a55' : '#e4e8f0'}`,
         boxShadow: selected
@@ -80,7 +76,7 @@ function ComponentNode(props: NodeProps<ComponentFlowNode>) {
       <div
         style={{
           width: 40,
-          background: CATEGORY_BG[data.category],
+          background: bg,
           borderRight: `1px solid ${color}22`,
           display: 'flex',
           alignItems: 'center',
@@ -103,11 +99,14 @@ function ComponentNode(props: NodeProps<ComponentFlowNode>) {
             <ExclamationCircleFilled style={{ color: '#fa8c16' }} />
           )}
         </span>
-        <div style={{ fontSize: 10, color, fontWeight: 700, letterSpacing: 0.5 }}>
+        <div style={{ fontSize: 11, color, fontWeight: 700, letterSpacing: 0.4, lineHeight: 1.5 }}>
           {data.category} · {CATEGORY_LABEL[data.category]}
         </div>
         <div style={{ fontWeight: 600, fontSize: 13, color: dark ? '#d5dbea' : '#1f2d3d', marginTop: 1 }}>{data.name}</div>
-        <div style={{ fontSize: 10, color: dark ? '#5f6b84' : '#a0a6b5', fontFamily: 'monospace' }}>{data.componentCode}</div>
+        {/* 控件编码：原 #a0a6b5/#5f6b84 分别只有 2.44:1 与 2.93:1，投影下基本看不清 */}
+        <div style={{ fontSize: 11, color: dark ? '#8b96ad' : '#6b7280', fontFamily: 'monospace', lineHeight: 1.5 }}>
+          {data.componentCode}
+        </div>
       </div>
       <Handle type="source" position={Position.Right} />
     </div>
@@ -120,7 +119,8 @@ const nodeTypes = { component: ComponentNode };
 const FLOW_EDGE_STYLE = {
   type: 'smoothstep' as const,
   animated: true,
-  style: { stroke: '#9aa4b8', strokeWidth: 1.6 },
+  // 描边色原为 #9aa4b8：白底上仅 2.51:1，投影后连线发虚；#78839a 提到 3.81:1
+  style: { stroke: '#78839a', strokeWidth: 1.8 },
 };
 
 /** 碎裂动画的单个粒子参数 */
@@ -180,6 +180,7 @@ function FlowCanvas() {
   const [draggingNode, setDraggingNode] = useState(false);
   const [trashActive, setTrashActive] = useState(false);
   const [shatter, setShatter] = useState<ShatterState | null>(null);
+  const reduced = usePrefersReducedMotion();
   const [tourOpen, setTourOpen] = useState(false);
   const nodeSeq = useRef(1);
   const trashRef = useRef<HTMLDivElement>(null);
@@ -418,11 +419,12 @@ function FlowCanvas() {
 
       // 立即从画布移除节点（碎裂动画在原位置播放）
       const wrapRect = canvasWrapRef.current?.getBoundingClientRect();
-      const color = CATEGORY_HEX[node.data.category];
+      const color = categoryColor(node.data.category, dark);
       setNodes((nds) => nds.filter((n) => n.id !== node.id));
       setEdges((eds) => eds.filter((ed) => ed.source !== node.id && ed.target !== node.id));
       setSelectedNodeId((sel) => (sel === node.id ? null : sel));
-      if (wrapRect) {
+      // 减少动态效果时不做碎裂动画，直接删除
+      if (wrapRect && !reduced) {
         // 动画起点上移一段，避免碎裂位置太靠下
         setShatter({
           x: clientX - wrapRect.left,
@@ -434,7 +436,7 @@ function FlowCanvas() {
       }
       appMessage().success(`已删除控件：${node.data.name}`);
     },
-    [],
+    [dark, reduced],
   );
 
   // 点击节点 → 打开参数抽屉
@@ -590,7 +592,7 @@ function FlowCanvas() {
               </Typography.Text>
               {groupedComponents.map((group) => (
                 <div key={group.category} style={{ marginTop: 12 }}>
-                  <Typography.Text strong style={{ color: CATEGORY_HEX[group.category], fontSize: 12 }}>
+                  <Typography.Text strong style={{ color: categoryColor(group.category, dark), fontSize: 12 }}>
                     {group.category} {CATEGORY_LABEL[group.category]}
                   </Typography.Text>
                   {group.items.map((comp) => (
@@ -600,9 +602,9 @@ function FlowCanvas() {
                       onDragStart={(e) => onDragStart(e, comp)}
                       title={comp.description}
                       style={{
-                        border: `1px solid ${CATEGORY_HEX[comp.category]}`,
-                        borderLeft: `4px solid ${CATEGORY_HEX[comp.category]}`,
-                        borderRadius: 4,
+                        border: `1px solid ${categoryColor(comp.category, dark)}`,
+                        borderLeft: `4px solid ${categoryColor(comp.category, dark)}`,
+                        borderRadius: 8,
                         padding: '6px 8px',
                         margin: '6px 0',
                         cursor: 'grab',
@@ -611,7 +613,7 @@ function FlowCanvas() {
                       }}
                     >
                       {comp.name}
-                      <div style={{ fontSize: 11, color: dark ? '#7d8899' : '#999' }}>{comp.code}</div>
+                      <div style={{ fontSize: 12, color: dark ? '#8b96ad' : '#6b7280' }}>{comp.code}</div>
                     </div>
                   ))}
                 </div>
@@ -666,7 +668,10 @@ function FlowCanvas() {
             <Background gap={16} color={dark ? '#232c42' : '#e8ebf2'} />
             <Controls />
             <MiniMap
-              nodeColor={(n) => CATEGORY_HEX[(n.data as ComponentNodeData).category] ?? '#9aa4b8'}
+              nodeColor={(n) => {
+                const cat = (n.data as ComponentNodeData).category;
+                return cat ? categoryColor(cat, dark) : '#78839a';
+              }}
               maskColor={dark ? 'rgba(15,20,32,.72)' : 'rgba(243,245,249,.72)'}
               bgColor={dark ? '#141b2b' : '#fff'}
               style={{ borderRadius: 8 }}
@@ -692,7 +697,7 @@ function FlowCanvas() {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: trashActive ? '#ff4d4f' : '#999',
+                color: trashActive ? '#ff4d4f' : dark ? '#8b96ad' : '#6b7280',
                 fontSize: 12,
                 zIndex: 10,
                 pointerEvents: 'none',

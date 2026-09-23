@@ -43,7 +43,7 @@ export function IconActionButton({
         color,
         cursor: disabled ? 'not-allowed' : 'pointer',
         userSelect: 'none',
-        borderRadius: 4,
+        borderRadius: 8,
         transition: 'color .2s',
       }}
     >

@@ -19,7 +19,7 @@ export function EmptyState({ description = '暂无数据' }: { description?: str
         </svg>
       }
       imageStyle={{ height: 88 }}
-      description={<span style={{ color: '#98a0b0', fontSize: 13 }}>{description}</span>}
+      description={<span style={{ color: '#6b7280', fontSize: 13 }}>{description}</span>}
     />
   );
 }
