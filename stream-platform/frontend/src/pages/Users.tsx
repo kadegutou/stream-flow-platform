@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Card, Form, Input, message, Modal, Popconfirm, Select, Space, Table, Tag } from 'antd';
+import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag } from 'antd';
 import { PlusOutlined, UserOutlined } from '@ant-design/icons';
 import { createUser, deleteUser, listUsers, updateUser, type UserPayload } from '../api/users';
 import { showApiError } from '../api/request';
+import { appMessage } from '../utils/antdApp';
 import type { User } from '../types';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
@@ -55,10 +56,10 @@ export default function Users() {
     try {
       if (editing) {
         await updateUser(editing.id, values);
-        message.success('用户已更新');
+        appMessage().success('用户已更新');
       } else {
         await createUser(values);
-        message.success('用户已创建');
+        appMessage().success('用户已创建');
       }
       setModalOpen(false);
       load();
@@ -72,7 +73,7 @@ export default function Users() {
   const onDelete = async (id: number) => {
     try {
       await deleteUser(id);
-      message.success('已删除');
+      appMessage().success('已删除');
       load();
     } catch (e) {
       showApiError(e, '删除失败');

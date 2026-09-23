@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { TOKEN_KEY } from '../api/request';
+import { NICKNAME_KEY, ROLE_KEY, TOKEN_KEY } from '../constants/storage';
 
 interface AuthState {
   token: string | null;
@@ -11,18 +11,18 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set) => ({
   token: localStorage.getItem(TOKEN_KEY),
-  nickname: localStorage.getItem('stream_platform_nickname') ?? '',
-  role: localStorage.getItem('stream_platform_role') ?? '',
+  nickname: localStorage.getItem(NICKNAME_KEY) ?? '',
+  role: localStorage.getItem(ROLE_KEY) ?? '',
   setAuth: (token, nickname, role) => {
     localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem('stream_platform_nickname', nickname);
-    localStorage.setItem('stream_platform_role', role);
+    localStorage.setItem(NICKNAME_KEY, nickname);
+    localStorage.setItem(ROLE_KEY, role);
     set({ token, nickname, role });
   },
   logout: () => {
     localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem('stream_platform_nickname');
-    localStorage.removeItem('stream_platform_role');
+    localStorage.removeItem(NICKNAME_KEY);
+    localStorage.removeItem(ROLE_KEY);
     set({ token: null, nickname: '', role: '' });
   },
 }));

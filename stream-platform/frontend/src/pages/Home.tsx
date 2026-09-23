@@ -518,22 +518,26 @@ function TopoGraph({ dark }: { dark: boolean }) {
 
 /* ========== 浮动粒子背景 ========== */
 
+/**
+ * 粒子是纯装饰且位置固定，在模块加载时算一次即可。
+ * 原先写在 `useRef(Array.from(...))` 里：随机数在每次渲染都会重算（只是被丢弃），
+ * 既浪费又是渲染期的不纯调用。
+ */
+const PARTICLES = Array.from({ length: 25 }, (_, i) => ({
+  id: i,
+  x: Math.random() * 100,
+  y: Math.random() * 100,
+  size: 2 + Math.random() * 4,
+  dur: 15 + Math.random() * 20,
+  delay: Math.random() * -20,
+}));
+
 function Particles({ dark }: { dark: boolean }) {
   const color = dark ? 'rgba(46,232,160,.1)' : 'rgba(124,58,237,.07)';
-  const particles = useRef(
-    Array.from({ length: 25 }, (_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: 2 + Math.random() * 4,
-      dur: 15 + Math.random() * 20,
-      delay: Math.random() * -20,
-    })),
-  );
 
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-      {particles.current.map((p) => (
+      {PARTICLES.map((p) => (
         <div
           key={p.id}
           style={{

@@ -1,4 +1,4 @@
-import { Layout, Menu, Dropdown, Avatar, Space, message, Breadcrumb, Spin } from 'antd';
+import { Layout, Menu, Dropdown, Avatar, Space, Breadcrumb, Spin } from 'antd';
 import {
   AppstoreOutlined,
   UnorderedListOutlined,
@@ -7,16 +7,17 @@ import {
   LogoutOutlined,
   MoonOutlined,
   SunOutlined,
-  LeftOutlined,
-  RightOutlined,
   ThunderboltFilled,
   HomeOutlined,
 } from '@ant-design/icons';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useRouteTransition } from './RouteTransition';
+import { EdgeCollapseButton, useEdgeHover } from './EdgeCollapseButton';
+import { IconActionButton } from './IconActionButton';
 import { Suspense, useMemo, useState } from 'react';
 import { useAuthStore } from '../store/auth';
-import { useThemeStore, useFontScaleStore } from '../store/theme';
+import { MAX_FONT_SCALE, MIN_FONT_SCALE, useFontScaleStore, useThemeStore } from '../store/theme';
+import { appMessage } from '../utils/antdApp';
 
 const { Sider, Header, Content } = Layout;
 
@@ -36,12 +37,16 @@ export default function AppLayout() {
   const { dark, toggle } = useThemeStore();
   const { scale, increase, decrease } = useFontScaleStore();
   const [collapsed, setCollapsed] = useState(false);
-  const [siderHover, setSiderHover] = useState(false);
+  const { hover: siderHover, handlers: siderHoverHandlers } = useEdgeHover();
 
   const visibleMenuItems = useMemo(
     () => menuItems.filter((m) => !m.adminOnly || role === 'ADMIN'),
     [role],
   );
+
+  /** 字体缩放按钮的颜色：到达上下限时变暗，提示不可再调 */
+  const scaleBtnColor = (atLimit: boolean) =>
+    dark ? (atLimit ? '#444' : '#d5dbea') : atLimit ? '#ccc' : '#5a6072';
 
   // 编辑器路由 /jobs/:id/editor 高亮「作业管理」
   const selectedKey = location.pathname.startsWith('/jobs')
@@ -72,53 +77,15 @@ export default function AppLayout() {
     // 先播转场，黑幕盖住后清登录态，转场结束后再提示
     transitionLogout(
       () => logout(),
-      () => message.success('已退出登录'),
+      () => appMessage().success('已退出登录'),
     );
   };
 
-  const collapseBtn = (
-    <div
-      onClick={() => setCollapsed(!collapsed)}
-      title={collapsed ? '展开导航栏' : '收起导航栏'}
-      style={{
-        position: 'absolute',
-        top: '50%',
-        right: -16,
-        transform: 'translateY(-50%)',
-        width: 26,
-        height: 60,
-        borderRadius: '0 26px 26px 0',
-        // 底色随明暗模式适配：暗色下用低透明白，浅色下用悬浮白 + 描边
-        background: dark ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.92)',
-        border: `1px solid ${dark ? 'rgba(255,255,255,.16)' : 'rgba(20,30,48,.1)'}`,
-        borderLeft: 'none',
-        boxShadow: dark ? 'none' : '0 2px 8px rgba(20,30,48,.12)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        zIndex: 20,
-        color: dark ? 'rgba(255,255,255,.75)' : '#5a6072',
-        fontSize: 11,
-        userSelect: 'none',
-        transition: 'background .2s, color .2s',
-      }}
-    >
-      {collapsed ? <RightOutlined /> : <LeftOutlined />}
-    </div>
-  );
-
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: 'var(--sp-viewport-h)' }}>
       {/* 折叠后保留 16px 触发条；仅当鼠标靠近栏右边缘时浮出折叠按钮 */}
       <div
-        onMouseMove={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          const nearRight = rect.right - e.clientX <= 40;
-          const nearMiddle = Math.abs(e.clientY - (rect.top + rect.height / 2)) <= 100;
-          setSiderHover(nearRight && nearMiddle);
-        }}
-        onMouseLeave={() => setSiderHover(false)}
+        {...siderHoverHandlers}
         style={{ position: 'relative', zIndex: 10, display: 'flex', alignSelf: 'stretch' }}
       >
         <Sider
@@ -129,7 +96,7 @@ export default function AppLayout() {
           trigger={null}
           style={{
             height: 'auto',
-            minHeight: '100vh',
+            minHeight: 'var(--sp-viewport-h)',
             display: 'flex',
             flexDirection: 'column',
             // 与登录页同一套深蓝渐变，保证进入系统后的视觉连贯
@@ -184,7 +151,14 @@ export default function AppLayout() {
           />
         </Sider>
         {/* 悬停任务栏区域时出现折叠/展开按钮 */}
-        {siderHover && collapseBtn}
+        {siderHover && (
+          <EdgeCollapseButton
+            collapsed={collapsed}
+            onToggle={() => setCollapsed(!collapsed)}
+            dark={dark}
+            label={collapsed ? '展开导航栏' : '收起导航栏'}
+          />
+        )}
       </div>
       <Layout>
         <Header
@@ -203,23 +177,18 @@ export default function AppLayout() {
           <Space size={20}>
             {/* 字体缩放 */}
             <Space size={4}>
-              <span
+              <IconActionButton
+                label="缩小字体"
                 onClick={decrease}
-                title="缩小字体"
-                style={{
-                  cursor: scale <= 0.85 ? 'not-allowed' : 'pointer',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: dark ? (scale <= 0.85 ? '#444' : '#d5dbea') : (scale <= 0.85 ? '#ccc' : '#5a6072'),
-                  userSelect: 'none',
-                  padding: '2px 6px',
-                  borderRadius: 4,
-                  transition: 'color .2s',
-                }}
+                disabled={scale <= MIN_FONT_SCALE}
+                color={scaleBtnColor(scale <= MIN_FONT_SCALE)}
+                fontSize={13}
+                fontWeight={700}
               >
                 A-
-              </span>
+              </IconActionButton>
               <span
+                aria-live="polite"
                 style={{
                   fontSize: 11,
                   color: dark ? '#666' : '#999',
@@ -230,38 +199,26 @@ export default function AppLayout() {
               >
                 {Math.round(scale * 100)}%
               </span>
-              <span
+              <IconActionButton
+                label="放大字体"
                 onClick={increase}
-                title="放大字体"
-                style={{
-                  cursor: scale >= 1.3 ? 'not-allowed' : 'pointer',
-                  fontSize: 15,
-                  fontWeight: 700,
-                  color: dark ? (scale >= 1.3 ? '#444' : '#d5dbea') : (scale >= 1.3 ? '#ccc' : '#5a6072'),
-                  userSelect: 'none',
-                  padding: '2px 6px',
-                  borderRadius: 4,
-                  transition: 'color .2s',
-                }}
+                disabled={scale >= MAX_FONT_SCALE}
+                color={scaleBtnColor(scale >= MAX_FONT_SCALE)}
+                fontSize={15}
+                fontWeight={700}
               >
                 A+
-              </span>
+              </IconActionButton>
             </Space>
             {/* 明暗主题切换 */}
-            <span
+            <IconActionButton
+              label={dark ? '切换为浅色模式' : '切换为暗色模式'}
               onClick={toggle}
-              title={dark ? '切换为浅色模式' : '切换为暗色模式'}
-              style={{
-                cursor: 'pointer',
-                fontSize: 17,
-                color: dark ? '#f5c518' : '#5a6072',
-                display: 'inline-flex',
-                alignItems: 'center',
-                transition: 'transform .3s',
-              }}
+              color={dark ? '#f5c518' : '#5a6072'}
+              fontSize={17}
             >
               {dark ? <SunOutlined /> : <MoonOutlined />}
-            </span>
+            </IconActionButton>
             <Dropdown
               menu={{
                 items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: handleLogout }],

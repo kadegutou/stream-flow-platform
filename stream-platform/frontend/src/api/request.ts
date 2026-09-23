@@ -1,7 +1,9 @@
 import axios, { type AxiosError } from 'axios';
-import { message } from 'antd';
+import { TOKEN_KEY } from '../constants/storage';
+import { appMessage } from '../utils/antdApp';
+import { notifyUnauthorized } from './session';
 
-export const TOKEN_KEY = 'stream_platform_token';
+export { TOKEN_KEY };
 
 /**
  * 规范化后的接口错误：业务层只需读 status / message，不必再解构 axios 错误体。
@@ -58,18 +60,13 @@ request.interceptors.response.use(
     const backendMsg = error.response?.data?.error;
     const msg = backendMsg || (status ? STATUS_TEXT[status] ?? `请求失败（${status}）` : networkMessage(error));
 
-    // 401 表示 token 失效。登录接口自身的 400/401 不走这里（见下方 isLoginRequest），
+    // 401 表示 token 失效：清掉本地 token 后交给 SessionBridge 做「清登录态 + 转场回登录页」。
+    // 登录接口自身的 400/401 不走这里（见下方 isLoginRequest），
     // 否则「密码错误」会被误报成「登录已过期」。
     const isLoginRequest = error.config?.url?.includes('/auth/login');
     if (status === 401 && !isLoginRequest) {
       localStorage.removeItem(TOKEN_KEY);
-      if (window.location.pathname !== '/login') {
-        message.warning('登录已过期，请重新登录');
-        // 留出提示可见时间再跳转，避免用户不知道为何被踢回登录页
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 800);
-      }
+      notifyUnauthorized();
     }
 
     return Promise.reject(new ApiError(status, msg, error));
@@ -82,12 +79,12 @@ request.interceptors.response.use(
  */
 export function showApiError(e: unknown, fallback = '操作失败'): void {
   if (e instanceof ApiError && e.message) {
-    message.error(e.message);
+    appMessage().error(e.message);
     return;
   }
   // 非接口错误（前端运行时异常）：打印出来便于排查，同时给用户兜底提示
   console.error('[非接口错误]', e);
-  message.error(fallback);
+  appMessage().error(fallback);
 }
 
 export default request;

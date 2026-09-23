@@ -4,8 +4,11 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
 import App from './App';
 import './global.css';
+import { initFontScale } from './store/theme';
 
 dayjs.locale('zh-cn');
+// 恢复上次的字号缩放（副作用显式化，不再放在 store 模块顶层）
+initFontScale();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

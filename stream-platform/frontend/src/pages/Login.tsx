@@ -1,4 +1,4 @@
-import { Button, Card, ConfigProvider, Form, Input, message, theme as antdTheme } from 'antd';
+import { Button, Card, ConfigProvider, Form, Input, theme as antdTheme } from 'antd';
 import {
   LockOutlined,
   UserOutlined,
@@ -11,6 +11,7 @@ import { useRouteTransition } from '../components/RouteTransition';
 import { useState } from 'react';
 import { login, register } from '../api/auth';
 import { showApiError } from '../api/request';
+import { appMessage } from '../utils/antdApp';
 import { useAuthStore } from '../store/auth';
 
 const FEATURES = [
@@ -76,7 +77,7 @@ export default function Login() {
     try {
       const res = await login(values);
       setAuth(res.token, res.nickname, res.role);
-      transitionLogin('/home', () => message.success(`欢迎，${res.nickname}`));
+      transitionLogin('/home', () => appMessage().success(`欢迎，${res.nickname}`));
     } catch (e) {
       showApiError(e, '登录失败，请检查用户名或密码');
     } finally {
@@ -89,7 +90,7 @@ export default function Login() {
     try {
       const res = await register(values);
       setAuth(res.token, res.nickname, res.role);
-      transitionLogin('/home', () => message.success(`注册成功，欢迎，${res.nickname}`));
+      transitionLogin('/home', () => appMessage().success(`注册成功，欢迎，${res.nickname}`));
     } catch (e) {
       showApiError(e, '注册失败');
     } finally {
@@ -102,7 +103,7 @@ export default function Login() {
       className="sp-login-page"
       style={{
         position: 'relative',
-        minHeight: '100vh',
+        minHeight: 'var(--sp-viewport-h)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

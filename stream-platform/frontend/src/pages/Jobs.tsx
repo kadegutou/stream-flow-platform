@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Dropdown, Form, Input, InputNumber, message, Modal, Popconfirm, Segmented, Space, Table } from 'antd';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button, Card, Dropdown, Form, Input, InputNumber, Modal, Popconfirm, Segmented, Space, Table } from 'antd';
 import { DownloadOutlined, PlusOutlined, SearchOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { useRouteTransition } from '../components/RouteTransition';
 import dayjs from 'dayjs';
 import { createJob, deleteJob, listJobs, offlineJob, onlineJob } from '../api/jobs';
 import { showApiError } from '../api/request';
+import { appMessage } from '../utils/antdApp';
 import type { Job } from '../types';
 import { StatusTag } from '../components/StatusTag';
 import { PageHeader } from '../components/PageHeader';
@@ -19,6 +20,7 @@ export default function Jobs() {
   const [saving, setSaving] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [form] = Form.useForm<{ name: string; description?: string; parallelism: number }>();
 
   // 搜索 + 状态筛选
@@ -34,19 +36,32 @@ export default function Jobs() {
     });
   }, [data, keyword, statusFilter]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       setData(await listJobs());
     } catch (e) {
       showApiError(e, '加载作业列表失败');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // 组件卸载后不再回调，避免延迟刷新打到已卸载的组件上
+  useEffect(() => () => clearTimeout(refreshTimerRef.current), []);
+
+  /**
+   * 上线/下线只负责把状态推进到 PENDING/STOPPING，最终态由调度器在 5s 内收敛。
+   * 立即刷一次让用户看到状态已变，再静默补刷一次让状态落到 RUNNING/STOPPED。
+   */
+  const refreshAfterStateChange = useCallback(() => {
+    load();
+    clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => load(true), 3000);
   }, [load]);
 
   const onCreate = async () => {
@@ -55,7 +70,7 @@ export default function Jobs() {
     try {
       // 创建作业不传 dag（空草稿），进画布编排保存时才提交 DAG
       await createJob(values);
-      message.success('作业已创建，请进入画布编排');
+      appMessage().success('作业已创建，请进入画布编排');
       setModalOpen(false);
       load();
     } catch (e) {
@@ -75,7 +90,7 @@ export default function Jobs() {
         parallelism: tpl.parallelism,
         dag: tpl.dag,
       });
-      message.success(`已载入「${tpl.name}」，可直接上线或进画布调整参数`);
+      appMessage().success(`已载入「${tpl.name}」，可直接上线或进画布调整参数`);
       load();
     } catch (e) {
       showApiError(e, '载入示例失败');
@@ -87,7 +102,7 @@ export default function Jobs() {
   const onDelete = async (id: number) => {
     try {
       await deleteJob(id);
-      message.success('已删除');
+      appMessage().success('已删除');
       load();
     } catch (e) {
       showApiError(e, '删除失败');
@@ -97,8 +112,8 @@ export default function Jobs() {
   const onOnline = async (id: number) => {
     try {
       await onlineJob(id);
-      message.success('已发起上线');
-      load();
+      appMessage().success('已发起上线，实例状态将在数秒内收敛');
+      refreshAfterStateChange();
     } catch (e) {
       showApiError(e, '上线失败');
     }
@@ -107,8 +122,8 @@ export default function Jobs() {
   const onOffline = async (id: number) => {
     try {
       await offlineJob(id);
-      message.success('已发起下线');
-      load();
+      appMessage().success('已发起下线，在途批次处理完即退出');
+      refreshAfterStateChange();
     } catch (e) {
       showApiError(e, '下线失败');
     }

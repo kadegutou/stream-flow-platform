@@ -4,7 +4,7 @@ import { ReloadOutlined, RiseOutlined, DatabaseOutlined, ClockCircleOutlined, Mo
 import dayjs from 'dayjs';
 import { listJobs } from '../api/jobs';
 import { getInstanceMetrics, listJobInstances } from '../api/instances';
-import { showApiError } from '../api/request';
+import { ApiError, showApiError } from '../api/request';
 import type { JobInstance, JobMetric } from '../types';
 import { StatusTag } from '../components/StatusTag';
 import { PageHeader } from '../components/PageHeader';
@@ -118,14 +118,19 @@ export default function Monitor() {
   const [instances, setInstances] = useState<JobInstance[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [connectionIssue, setConnectionIssue] = useState<string | null>(null);
   const [metricsOpen, setMetricsOpen] = useState(false);
   const [metricsInstance, setMetricsInstance] = useState<JobInstance | null>(null);
   const [metrics, setMetrics] = useState<JobMetric[]>([]);
   const [metricsLoading, setMetricsLoading] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval>>();
+  const inFlightRef = useRef(false);
 
   // 汇总所有作业的实例（无全局实例接口，按作业聚合）
   const load = useCallback(async (showLoading = false) => {
+    // 后台轮询：上一轮还没回来就跳过本轮，避免慢查询时请求叠加
+    if (!showLoading && inFlightRef.current) return;
+    inFlightRef.current = true;
     if (showLoading) setLoading(true);
     try {
       const jobs = await listJobs();
@@ -143,18 +148,35 @@ export default function Monitor() {
       all.sort((a, b) => b.id - a.id);
       setInstances(all);
       setLastUpdated(new Date());
+      setConnectionIssue(null);
     } catch (e) {
-      showApiError(e, '加载运行实例失败');
+      // 手动刷新/首次加载失败才弹提示；后台轮询失败只更新页头状态位，
+      // 否则后端一抖动就会每 5s 弹一次错误提示刷屏
+      setConnectionIssue(e instanceof ApiError ? e.message : '无法连接服务器');
+      if (showLoading) {
+        showApiError(e, '加载运行实例失败');
+      }
     } finally {
+      inFlightRef.current = false;
       if (showLoading) setLoading(false);
     }
   }, []);
 
-  // 每 5 秒轮询
+  // 每 5 秒轮询；标签页切到后台时暂停，切回前台立即补一次
   useEffect(() => {
     load(true);
-    timerRef.current = setInterval(() => load(false), 5000);
-    return () => clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      if (document.hidden) return;
+      load(false);
+    }, 5000);
+    const onVisibilityChange = () => {
+      if (!document.hidden) load(false);
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearInterval(timerRef.current);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [load]);
 
   // 打开指标抽屉并轮询采样
@@ -195,11 +217,15 @@ export default function Monitor() {
         subtitle="作业实例状态与实时吞吐，每 5 秒自动刷新"
         extra={
           <Space>
-            {lastUpdated && (
+            {connectionIssue ? (
+              <Typography.Text type="warning" style={{ fontSize: 12 }}>
+                自动刷新中断（{connectionIssue}），正在按 5 秒重试
+              </Typography.Text>
+            ) : lastUpdated ? (
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 最后更新 {dayjs(lastUpdated).format('HH:mm:ss')}（5s 自动刷新）
               </Typography.Text>
-            )}
+            ) : null}
             <Button icon={<ReloadOutlined />} onClick={() => load(true)}>
               刷新
             </Button>

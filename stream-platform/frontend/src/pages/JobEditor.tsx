@@ -11,7 +11,6 @@ import {
   Handle,
   Position,
   useReactFlow,
-  type Node,
   type Edge,
   type Connection,
   type NodeChange,
@@ -19,28 +18,28 @@ import {
   type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Button, Drawer, Form, Input, InputNumber, message, Modal, Select, Space, Switch, Tour, Typography } from 'antd';
-import { ArrowLeftOutlined, CheckCircleFilled, DeleteOutlined, ExclamationCircleFilled, ExportOutlined, ImportOutlined, LayoutOutlined, LeftOutlined, NodeExpandOutlined, QuestionCircleOutlined, RedoOutlined, RightOutlined, SaveOutlined, UndoOutlined } from '@ant-design/icons';
+import { Button, Drawer, Form, Space, Tour, Typography } from 'antd';
+import { ArrowLeftOutlined, CheckCircleFilled, DeleteOutlined, ExclamationCircleFilled, ExportOutlined, ImportOutlined, LayoutOutlined, NodeExpandOutlined, QuestionCircleOutlined, RedoOutlined, SaveOutlined, UndoOutlined } from '@ant-design/icons';
 import { useParams } from 'react-router-dom';
 import { useRouteTransition } from '../components/RouteTransition';
 import { useThemeStore } from '../store/theme';
 import { listComponents } from '../api/components';
 import { getJob, updateJob } from '../api/jobs';
 import { showApiError } from '../api/request';
-import type { ComponentCategory, ComponentDef, Dag, Job, ParamSchema } from '../types';
+import { appMessage, appModal } from '../utils/antdApp';
+import { EdgeCollapseButton, useEdgeHover } from '../components/EdgeCollapseButton';
+import type { ComponentCategory, ComponentDef, Dag, Job } from '../types';
 import { CATEGORY_HEX, CATEGORY_LABEL } from '../components/CategoryTag';
+import { ParamFormItems } from '../components/ParamFormItems';
+import {
+  isNodeConfigured,
+  layeredLayout,
+  validateDag,
+  type ComponentFlowNode,
+  type ComponentNodeData,
+} from '../utils/dag';
 
 /* ---------- 画布节点数据 ---------- */
-
-interface ComponentNodeData extends Record<string, unknown> {
-  componentCode: string;
-  name: string;
-  category: ComponentCategory;
-  params: Record<string, unknown>;
-  schema?: ParamSchema;
-}
-
-type ComponentFlowNode = Node<ComponentNodeData, 'component'>;
 
 const CATEGORY_BG: Record<ComponentCategory, string> = {
   SOURCE: '#f6ffed',
@@ -117,18 +116,6 @@ function ComponentNode(props: NodeProps<ComponentFlowNode>) {
 
 const nodeTypes = { component: ComponentNode };
 
-/** 判断节点必填参数是否已配置完整 */
-function isNodeConfigured(data: ComponentNodeData): boolean {
-  const required = data.schema?.required ?? [];
-  if (required.length === 0) return true;
-  return required.every((key) => {
-    const v = data.params[key];
-    if (v === undefined || v === null || v === '') return false;
-    if (Array.isArray(v) && v.length === 0) return false;
-    return true;
-  });
-}
-
 /** 连线样式：平滑贝塞尔 + 流动虚线动画 */
 const FLOW_EDGE_STYLE = {
   type: 'smoothstep' as const,
@@ -136,98 +123,41 @@ const FLOW_EDGE_STYLE = {
   style: { stroke: '#9aa4b8', strokeWidth: 1.6 },
 };
 
-/* ---------- 参数表单（按 JSON Schema 动态渲染） ---------- */
-
-function ParamFormItems({ schema }: { schema?: ParamSchema }) {
-  const properties = schema?.properties ?? {};
-  const required = schema?.required ?? [];
-  const entries = Object.entries(properties);
-
-  if (entries.length === 0) {
-    return <Typography.Text type="secondary">该控件无需配置参数</Typography.Text>;
-  }
-
-  return (
-    <>
-      {entries.map(([key, prop]) => {
-        const label = prop.title || key;
-        const rules = required.includes(key)
-          ? [{ required: true, message: `请填写${label}` }]
-          : [];
-
-        // enum → Select
-        if (prop.enum && prop.enum.length > 0) {
-          return (
-            <Form.Item key={key} name={key} label={label} rules={rules} tooltip={prop.description}>
-              <Select
-                allowClear
-                options={prop.enum.map((v) => ({ value: v, label: String(v) }))}
-                placeholder="请选择"
-              />
-            </Form.Item>
-          );
-        }
-        // array(string) → Select tags
-        if (prop.type === 'array' && (!prop.items?.type || prop.items.type === 'string')) {
-          return (
-            <Form.Item key={key} name={key} label={label} rules={rules} tooltip={prop.description}>
-              <Select mode="tags" open={false} placeholder="输入后回车添加" suffixIcon={null} />
-            </Form.Item>
-          );
-        }
-        // boolean → Switch
-        if (prop.type === 'boolean') {
-          return (
-            <Form.Item
-              key={key}
-              name={key}
-              label={label}
-              rules={rules}
-              tooltip={prop.description}
-              valuePropName="checked"
-            >
-              <Switch />
-            </Form.Item>
-          );
-        }
-        // number / integer → InputNumber
-        if (prop.type === 'number' || prop.type === 'integer') {
-          return (
-            <Form.Item key={key} name={key} label={label} rules={rules} tooltip={prop.description}>
-              <InputNumber style={{ width: '100%' }} precision={prop.type === 'integer' ? 0 : undefined} />
-            </Form.Item>
-          );
-        }
-        // string / 其他 → Input
-        return (
-          <Form.Item key={key} name={key} label={label} rules={rules} tooltip={prop.description}>
-            <Input placeholder={prop.description || label} />
-          </Form.Item>
-        );
-      })}
-    </>
-  );
+/** 碎裂动画的单个粒子参数 */
+interface ShatterParticle {
+  id: number;
+  dx: string;
+  dy: string;
+  rot: number;
+  size: number;
+  dur: string;
 }
 
-/* ---------- 简单从左到右分层布局 ---------- */
+/** 碎裂动画状态：起点、颜色 + 预生成的粒子参数 */
+interface ShatterState {
+  x: number;
+  y: number;
+  color: string;
+  particles: ShatterParticle[];
+}
 
-function layeredLayout(nodes: ComponentFlowNode[], edges: Edge[]): ComponentFlowNode[] {
-  const layerOf = new Map<string, number>();
-  nodes.forEach((n) => layerOf.set(n.id, 0));
-  // 迭代松弛计算层级（DAG 场景足够）
-  for (let i = 0; i < nodes.length; i++) {
-    edges.forEach((e) => {
-      const fromLayer = layerOf.get(e.source) ?? 0;
-      const toLayer = layerOf.get(e.target) ?? 0;
-      if (fromLayer + 1 > toLayer) layerOf.set(e.target, fromLayer + 1);
-    });
-  }
-  const layerIndex = new Map<number, number>();
-  return nodes.map((n) => {
-    const layer = layerOf.get(n.id) ?? 0;
-    const idx = layerIndex.get(layer) ?? 0;
-    layerIndex.set(layer, idx + 1);
-    return { ...n, position: { x: layer * 260 + 40, y: idx * 120 + 40 } };
+/**
+ * 生成一组碎裂粒子参数。
+ * 只在「删除节点」的事件回调里调用：渲染期使用随机数会让渲染变成非纯函数
+ * （重复渲染结果不同、截图不稳定）。
+ */
+function makeShatterParticles(): ShatterParticle[] {
+  return Array.from({ length: 24 }, (_, i) => {
+    const angle = (i / 24) * Math.PI * 2 + Math.random() * 0.5;
+    const spread = 40 + Math.random() * 80;
+    return {
+      id: i,
+      dx: (Math.cos(angle) * spread).toFixed(0),
+      dy: (220 + Math.random() * 260).toFixed(0), // 总体向下坠落出画布
+      rot: Math.round((Math.random() - 0.5) * 720),
+      size: 6 + Math.random() * 8,
+      dur: (0.55 + Math.random() * 0.3).toFixed(2),
+    };
   });
 }
 
@@ -246,10 +176,10 @@ function FlowCanvas() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
-  const [panelHover, setPanelHover] = useState(false);
+  const { hover: panelHover, handlers: panelHoverHandlers } = useEdgeHover();
   const [draggingNode, setDraggingNode] = useState(false);
   const [trashActive, setTrashActive] = useState(false);
-  const [shatter, setShatter] = useState<{ x: number; y: number; color: string } | null>(null);
+  const [shatter, setShatter] = useState<ShatterState | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const nodeSeq = useRef(1);
   const trashRef = useRef<HTMLDivElement>(null);
@@ -328,16 +258,41 @@ function FlowCanvas() {
   const historyRef = useRef<{ nodes: ComponentFlowNode[]; edges: Edge[] }[]>([]);
   const historyIndexRef = useRef(-1);
   const loadedRef = useRef(false); // DAG 加载完成前不记历史，避免把空画布当成可撤销的初始态
-  const [historyTick, setHistoryTick] = useState(0); // 驱动按钮可用态刷新
+  const [paramSyncTick, setParamSyncTick] = useState(0); // 撤销/重做后强制参数抽屉重新同步表单
+
+  // 历史栈本体放 ref（避免每次入栈都重建回调），栈指针另存一份 state 供渲染使用：
+  // 渲染期直接读 ref 不是合法用法（React 可能在没有 state 变化时重渲染），故这里显式同步。
+  const [historyState, setHistoryState] = useState({ index: -1, size: 0 });
+  const syncHistoryState = useCallback(() => {
+    setHistoryState({ index: historyIndexRef.current, size: historyRef.current.length });
+  }, []);
+  const canUndo = historyState.index > 0;
+  const canRedo = historyState.index < historyState.size - 1;
+
+  /**
+   * 生成历史快照。刻意剥掉 React Flow 注入的瞬态字段（selected / dragging / measured）：
+   * 否则「点一下节点」这种纯选中变化也会被判定成一次编辑，Ctrl+Z 会先撤销选中而不是撤销编辑。
+   */
+  const snapshotOf = useCallback(
+    (ns: ComponentFlowNode[], es: Edge[]) => ({
+      nodes: ns.map((n) => ({
+        ...n,
+        selected: undefined,
+        dragging: undefined,
+        measured: undefined,
+        position: { ...n.position },
+        data: { ...n.data },
+      })),
+      edges: es.map((e) => ({ ...e, selected: undefined })),
+    }),
+    [],
+  );
 
   // nodes/edges 稳定 500ms 后记一次快照；与当前指针快照相同则跳过（撤销/重做自身触发的变化）
   useEffect(() => {
     if (!loadedRef.current) return;
     const timer = setTimeout(() => {
-      const snapshot = {
-        nodes: nodes.map((n) => ({ ...n, position: { ...n.position }, data: { ...n.data } })),
-        edges: edges.map((e) => ({ ...e })),
-      };
+      const snapshot = snapshotOf(nodes, edges);
       const stack = historyRef.current;
       const cur = stack[historyIndexRef.current];
       if (cur && JSON.stringify(cur) === JSON.stringify(snapshot)) return;
@@ -345,32 +300,30 @@ function FlowCanvas() {
       stack.push(snapshot);
       if (stack.length > 60) stack.shift(); // 上限 60 步，防内存增长
       historyIndexRef.current = stack.length - 1;
-      setHistoryTick((v) => v + 1);
+      syncHistoryState();
     }, 500);
     return () => clearTimeout(timer);
-  }, [nodes, edges]);
+  }, [nodes, edges, snapshotOf, syncHistoryState]);
 
-  const applySnapshot = useCallback((index: number) => {
-    const snap = historyRef.current[index];
-    if (!snap) return;
-    historyIndexRef.current = index;
-    setNodes(snap.nodes);
-    setEdges(snap.edges);
-    setSelectedNodeId(null);
-    setHistoryTick((v) => v + 1);
-  }, []);
+  const applySnapshot = useCallback(
+    (index: number) => {
+      const snap = historyRef.current[index];
+      if (!snap) return;
+      historyIndexRef.current = index;
+      setNodes(snap.nodes);
+      setEdges(snap.edges);
+      // 快照里没有 selected，撤销后保持「刚才在编辑的节点」仍选中，
+      // 并让参数抽屉重新同步表单（否则抽屉里显示的还是撤销前的值）
+      const stillExists = selectedNodeId != null && snap.nodes.some((n) => n.id === selectedNodeId);
+      setSelectedNodeId(stillExists ? selectedNodeId : null);
+      if (stillExists) setParamSyncTick((v) => v + 1);
+      syncHistoryState();
+    },
+    [selectedNodeId, syncHistoryState],
+  );
 
   const undo = useCallback(() => applySnapshot(historyIndexRef.current - 1), [applySnapshot]);
   const redo = useCallback(() => applySnapshot(historyIndexRef.current + 1), [applySnapshot]);
-
-  // 历史栈存在 ref 里（避免每次入栈都重建回调），用 historyTick 驱动按钮可用态重算
-  const { canUndo, canRedo } = useMemo(
-    () => ({
-      canUndo: historyIndexRef.current > 0,
-      canRedo: historyIndexRef.current < historyRef.current.length - 1,
-    }),
-    [historyTick],
-  );
 
   // Ctrl/Cmd+Z 撤销，Ctrl+Shift+Z 或 Ctrl+Y 重做（输入框内不拦截，交给浏览器原生撤销）
   useEffect(() => {
@@ -471,10 +424,15 @@ function FlowCanvas() {
       setSelectedNodeId((sel) => (sel === node.id ? null : sel));
       if (wrapRect) {
         // 动画起点上移一段，避免碎裂位置太靠下
-        setShatter({ x: clientX - wrapRect.left, y: clientY - wrapRect.top - 60, color });
+        setShatter({
+          x: clientX - wrapRect.left,
+          y: clientY - wrapRect.top - 60,
+          color,
+          particles: makeShatterParticles(),
+        });
         setTimeout(() => setShatter(null), 900);
       }
-      message.success(`已删除控件：${node.data.name}`);
+      appMessage().success(`已删除控件：${node.data.name}`);
     },
     [],
   );
@@ -488,7 +446,8 @@ function FlowCanvas() {
       paramForm.resetFields();
       paramForm.setFieldsValue(selectedNode.data.params);
     }
-  }, [selectedNodeId]); // eslint-disable-line react-hooks/exhaustive-deps
+    // paramSyncTick：撤销/重做后强制重新灌一次表单值
+  }, [selectedNodeId, paramSyncTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onParamValuesChange = (_: unknown, allValues: Record<string, unknown>) => {
     if (!selectedNodeId) return;
@@ -503,57 +462,12 @@ function FlowCanvas() {
     );
   };
 
-  // 保存前本地预检：结构 + 必填参数，问题逐条列出
-  const validateDag = (): string[] => {
-    const problems: string[] = [];
-    if (nodes.length === 0) {
-      problems.push('画布为空：请至少拖入一个输入控件和一个输出控件');
-      return problems;
-    }
-    const sources = nodes.filter((n) => n.data.category === 'SOURCE');
-    const sinks = nodes.filter((n) => n.data.category === 'SINK');
-    if (sources.length === 0) problems.push('缺少输入控件（SOURCE）');
-    if (sinks.length === 0) problems.push('缺少输出控件（SINK）');
-
-    // 孤立节点（无任何连线）
-    const connected = new Set<string>();
-    edges.forEach((e) => {
-      connected.add(e.source);
-      connected.add(e.target);
-    });
-    nodes.forEach((n) => {
-      if (!connected.has(n.id) && nodes.length > 1) {
-        problems.push(`「${n.data.name}」未连线`);
-      }
-    });
-
-    // 输入控件不应有入边、输出控件不应有出边
-    edges.forEach((e) => {
-      const from = nodes.find((n) => n.id === e.source);
-      const to = nodes.find((n) => n.id === e.target);
-      if (from?.data.category === 'SINK') problems.push(`输出控件「${from.data.name}」不能再连出`);
-      if (to?.data.category === 'SOURCE') problems.push(`输入控件「${to.data.name}」不能有输入连线`);
-    });
-
-    // 必填参数缺失
-    nodes.forEach((n) => {
-      if (!isNodeConfigured(n.data)) {
-        const missing = (n.data.schema?.required ?? []).filter((key) => {
-          const v = n.data.params[key];
-          return v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
-        });
-        problems.push(`「${n.data.name}」缺少必填参数：${missing.join('、')}`);
-      }
-    });
-    return [...new Set(problems)];
-  };
-
   // 保存 DAG
   const onSave = async () => {
     if (!job) return;
-    const problems = validateDag();
+    const problems = validateDag(nodes, edges);
     if (problems.length > 0) {
-      Modal.warning({
+      appModal().warning({
         title: '作业还不能保存',
         content: (
           <ul style={{ paddingLeft: 18, margin: '8px 0 0' }}>
@@ -583,7 +497,7 @@ function FlowCanvas() {
         dag,
       });
       setJob(updated);
-      message.success(`已保存（版本 v${updated.version}）`);
+      appMessage().success(`已保存（版本 v${updated.version}）`);
     } catch (e) {
       showApiError(e, '保存失败');
     } finally {
@@ -593,7 +507,7 @@ function FlowCanvas() {
 
   const onAutoLayout = () => {
     setNodes((nds) => layeredLayout(nds, edges));
-    message.success('已自动布局');
+    appMessage().success('已自动布局');
   };
 
   const groupedComponents = useMemo(
@@ -606,7 +520,7 @@ function FlowCanvas() {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 96px)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(var(--sp-viewport-h) - 96px)' }}>
       {/* 顶部工具栏 */}
       <div
         style={{
@@ -658,13 +572,7 @@ function FlowCanvas() {
         {/* 左侧控件面板（可折叠；折叠后留触发条） */}
         <div
           ref={panelRef}
-          onMouseMove={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const nearRight = rect.right - e.clientX <= 40;
-            const nearMiddle = Math.abs(e.clientY - (rect.top + rect.height / 2)) <= 100;
-            setPanelHover(nearRight && nearMiddle);
-          }}
-          onMouseLeave={() => setPanelHover(false)}
+          {...panelHoverHandlers}
           style={{ position: 'relative', width: panelCollapsed ? 16 : 220, flexShrink: 0, transition: 'width .15s' }}
         >
           {!panelCollapsed && (
@@ -715,34 +623,12 @@ function FlowCanvas() {
           )}
           {/* 悬停面板区域时出现折叠/展开按钮：半透明、垂直居中、直边贴栏、外侧半圆 */}
           {panelHover && (
-            <div
-              onClick={() => setPanelCollapsed(!panelCollapsed)}
-              title={panelCollapsed ? '展开控件栏' : '收起控件栏'}
-              style={{
-                position: 'absolute',
-                top: '50%',
-                right: -16,
-                transform: 'translateY(-50%)',
-                width: 26,
-                height: 60,
-                borderRadius: '0 26px 26px 0',
-                background: dark ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.92)',
-                border: `1px solid ${dark ? 'rgba(255,255,255,.16)' : 'rgba(20,30,48,.1)'}`,
-                borderLeft: 'none',
-                boxShadow: dark ? 'none' : '0 2px 8px rgba(20,30,48,.12)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                zIndex: 20,
-                color: dark ? 'rgba(255,255,255,.75)' : '#5a6072',
-                fontSize: 11,
-                userSelect: 'none',
-                transition: 'background .2s, color .2s',
-              }}
-            >
-              {panelCollapsed ? <RightOutlined /> : <LeftOutlined />}
-            </div>
+            <EdgeCollapseButton
+              collapsed={panelCollapsed}
+              onToggle={() => setPanelCollapsed(!panelCollapsed)}
+              dark={dark}
+              label={panelCollapsed ? '展开控件栏' : '收起控件栏'}
+            />
           )}
         </div>
 
@@ -819,35 +705,27 @@ function FlowCanvas() {
           )}
           {/* 碎裂粒子：节点删除瞬间在其位置散开坠落 */}
           {shatter &&
-            Array.from({ length: 24 }).map((_, i) => {
-              const angle = (i / 24) * Math.PI * 2 + Math.random() * 0.5;
-              const spread = 40 + Math.random() * 80;
-              const dx = Math.cos(angle) * spread;
-              const dy = 220 + Math.random() * 260; // 总体向下坠落出画布
-              const rot = Math.round((Math.random() - 0.5) * 720);
-              const size = 6 + Math.random() * 8;
-              return (
-                <div
-                  key={i}
-                  style={{
-                    position: 'absolute',
-                    left: shatter.x - size / 2,
-                    top: shatter.y - size / 2,
-                    width: size,
-                    height: size,
-                    borderRadius: 2,
-                    background: shatter.color,
-                    opacity: 0.9,
-                    zIndex: 30,
-                    pointerEvents: 'none',
-                    ['--dx' as string]: `${dx.toFixed(0)}px`,
-                    ['--dy' as string]: `${dy.toFixed(0)}px`,
-                    ['--rot' as string]: `${rot}deg`,
-                    animation: `sp-shatter-fall ${(0.55 + Math.random() * 0.3).toFixed(2)}s ease-in forwards`,
-                  }}
-                />
-              );
-            })}
+            shatter.particles.map((p) => (
+              <div
+                key={p.id}
+                style={{
+                  position: 'absolute',
+                  left: shatter.x - p.size / 2,
+                  top: shatter.y - p.size / 2,
+                  width: p.size,
+                  height: p.size,
+                  borderRadius: 2,
+                  background: shatter.color,
+                  opacity: 0.9,
+                  zIndex: 30,
+                  pointerEvents: 'none',
+                  ['--dx' as string]: `${p.dx}px`,
+                  ['--dy' as string]: `${p.dy}px`,
+                  ['--rot' as string]: `${p.rot}deg`,
+                  animation: `sp-shatter-fall ${p.dur}s ease-in forwards`,
+                }}
+              />
+            ))}
         </div>
       </div>
 
