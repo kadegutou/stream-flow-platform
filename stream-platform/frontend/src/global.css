@@ -4,7 +4,7 @@
 .sp-edge-toggle:focus-visible,
 .sp-icon-action:focus-visible,
 .sp-quick-card:focus-visible {
-  outline: 2px solid #2f54eb;
+  outline: 2px solid var(--sp-focus-ring);
   outline-offset: 2px;
 }
 
@@ -13,12 +13,22 @@
  * 原先在 onMouseEnter 里直接改 DOM 样式，绕开 React 且把暗色阴影值写死在 JSX 里。
  */
 .sp-quick-card {
-  transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s;
+  transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s, background 0.25s;
 }
 .sp-quick-card:hover {
   transform: translateY(-3px);
   border-color: var(--sp-quick-border-hover);
   box-shadow: var(--sp-quick-shadow-hover);
+  /* Kylin 风格：hover 整卡变为强调色背景 */
+  background: var(--sp-quick-accent) !important;
+}
+/* hover 时内部文字反转为卡片底色 */
+.sp-quick-card:hover > div {
+  color: var(--sp-quick-card-bg) !important;
+}
+/* hover 时编号变亮 */
+.sp-quick-card:hover > span[aria-hidden] {
+  opacity: 0.15 !important;
 }
 
 /* 链接样式的原生按钮（面包屑等）：保留文字外观，同时可聚焦、可回车触发 */
@@ -32,7 +42,7 @@
   border-radius: 4px;
 }
 .sp-link-button:focus-visible {
-  outline: 2px solid #2f54eb;
+  outline: 2px solid var(--sp-focus-ring);
   outline-offset: 2px;
 }
 
@@ -56,6 +66,12 @@ body {
     'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
 }
 
+/* 全局选中高亮：品牌蓝底白字 */
+::selection {
+  background: #2f54eb;
+  color: #fff;
+}
+
 /* ========== Kylin 风格路由转场（平台蓝色系，明暗两套） ========== */
 .sp-route-transition {
   position: fixed;
@@ -65,8 +81,8 @@ body {
   overflow: hidden;
   background: #0d1420;
   background-image:
-    linear-gradient(rgba(213, 219, 234, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(213, 219, 234, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(var(--sp-on-dark-rgb), 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--sp-on-dark-rgb), 0.04) 1px, transparent 1px);
   background-size: 82px 82px;
 }
 
@@ -84,12 +100,12 @@ body {
 }
 .sp-rt-line-left {
   left: 13vw;
-  background: #5b8cff;
+  background: var(--sp-accent);
 }
 .sp-rt-line-right {
   right: 13vw;
   left: auto;
-  background: #5b8cff;
+  background: var(--sp-accent);
 }
 /* 横线 */
 .sp-rt-line-h {
@@ -100,12 +116,12 @@ body {
 }
 .sp-rt-line-top {
   top: 12vh;
-  background: #5b8cff;
+  background: var(--sp-accent);
 }
 .sp-rt-line-bottom {
   bottom: 12vh;
   top: auto;
-  background: #5b8cff;
+  background: var(--sp-accent);
 }
 
 /* ---- 文字位置（根据线条方向） ---- */
@@ -118,12 +134,12 @@ body {
 }
 .sp-route-copy span,
 .sp-route-copy small {
-  color: #7d8899;
+  color: var(--sp-text-on-deep-muted);
   font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: 2px;
 }
 .sp-route-copy b {
-  color: #e8ecf5;
+  color: var(--sp-text-on-deep);
   font: 900 clamp(46px, 6vw, 84px) / 1 "Noto Sans SC", "Microsoft YaHei UI", sans-serif;
   white-space: nowrap;
 }
@@ -184,20 +200,21 @@ body {
 
 /* 浅色模式 */
 html:not([data-sp-dark='true']) .sp-route-transition {
-  background: #f3f5f9;
+  background: var(--sp-page);
   background-image:
     linear-gradient(rgba(31, 45, 61, 0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgba(31, 45, 61, 0.05) 1px, transparent 1px);
 }
 html:not([data-sp-dark='true']) .sp-rt-line {
-  background: #2f54eb;
+  background: var(--sp-accent);
 }
 html:not([data-sp-dark='true']) .sp-route-copy span,
 html:not([data-sp-dark='true']) .sp-route-copy small {
+  /* TODO(对比度): #98a0b0 在浅色底上仅 2.54:1，属历史值，下一批统一提升 */
   color: #98a0b0;
 }
 html:not([data-sp-dark='true']) .sp-route-copy b {
-  color: #1f2d3d;
+  color: var(--sp-text);
 }
 html:not([data-sp-dark='true']) .sp-route-transition > em {
   -webkit-text-stroke-color: rgba(31, 45, 61, 0.08);
@@ -212,6 +229,11 @@ html:not([data-sp-dark='true']) .sp-route-transition > em {
 }
 .sp-route-transition.is-entering {
   animation: spRouteReveal 0.62s cubic-bezier(0.76, 0, 0.24, 1) both;
+}
+/* 登录/退出转场：有百叶窗遮盖，不用 clip-path 扫出，直接淡出 */
+.sp-route-transition.sp-rt-login.is-entering,
+.sp-route-transition.sp-rt-logout.is-entering {
+  animation: spRouteAuthReveal 1.59s cubic-bezier(0.76, 0, 0.24, 1) both;
 }
 .sp-route-transition.is-entering .sp-route-copy {
   animation: spRouteContentOut 0.48s cubic-bezier(0.7, 0, 0.84, 0) 80ms both;
@@ -242,6 +264,11 @@ html:not([data-sp-dark='true']) .sp-route-transition > em {
 @keyframes spRouteReveal {
   0%, 18% { clip-path: inset(0); visibility: visible; }
   to      { clip-path: inset(0 0 0 100%); visibility: hidden; }
+}
+/* 登录/退出：百叶窗升起（920ms）→ 停 0.15s → 滑出 0.52s */
+@keyframes spRouteAuthReveal {
+  0%, 67% { clip-path: inset(0); visibility: visible; opacity: 1; }
+  to      { clip-path: inset(0 100% 0 0); visibility: hidden; opacity: 1; }
 }
 @keyframes spRouteContentOut {
   from { opacity: 1; transform: translate(0, -50%); }
@@ -274,7 +301,7 @@ html:not([data-sp-dark='true']) .sp-route-transition > em {
 /* ========== 登录 / 退出专属转场 ========== */
 /* 登录：斜切条用品牌蓝，标题上移+更大字重 */
 .sp-route-transition.sp-rt-login > i {
-  background: linear-gradient(180deg, #2f54eb, #5b8cff);
+  background: var(--sp-accent-bar-gradient);
   width: clamp(160px, 18vw, 300px);
 }
 .sp-route-transition.sp-rt-login .sp-route-copy {
@@ -285,7 +312,7 @@ html:not([data-sp-dark='true']) .sp-route-transition > em {
 }
 /* 退出：斜切条用暗红，标题同样上移+统一大小 */
 .sp-route-transition.sp-rt-logout > i {
-  background: linear-gradient(180deg, #8b2a2a, #c04545);
+  background: var(--sp-logout-gradient);
 }
 .sp-route-transition.sp-rt-logout .sp-route-copy {
   top: 38%;
@@ -295,19 +322,19 @@ html:not([data-sp-dark='true']) .sp-route-transition > em {
 }
 /* 浅色模式下登录/退出条保持深色底 */
 html:not([data-sp-dark='true']) .sp-route-transition.sp-rt-login > i {
-  background: linear-gradient(180deg, #2f54eb, #5b8cff);
+  background: var(--sp-accent-bar-gradient);
 }
 html:not([data-sp-dark='true']) .sp-route-transition.sp-rt-logout > i {
-  background: linear-gradient(180deg, #8b2a2a, #c04545);
+  background: var(--sp-logout-gradient);
 }
 
 /* 登录/退出线条颜色 */
 .sp-rt-line-login {
-  background: linear-gradient(180deg, #2f54eb, #5b8cff) !important;
+  background: var(--sp-accent-bar-gradient) !important;
   width: clamp(160px, 18vw, 300px) !important;
 }
 .sp-rt-line-logout {
-  background: linear-gradient(180deg, #8b2a2a, #c04545) !important;
+  background: var(--sp-logout-gradient) !important;
 }
 
 /* 100% 闪烁动画 */
@@ -332,32 +359,32 @@ html:not([data-sp-dark='true']) .sp-route-transition.sp-rt-logout > i {
 .sp-rt-progress-bar {
   width: clamp(360px, 38vw, 620px);
   height: 5px;
-  background: rgba(122, 165, 255, 0.15);
+  background: rgba(var(--sp-accent-light-rgb), 0.15);
   border-radius: 3px;
   overflow: hidden;
 }
 .sp-rt-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #2f54eb, #5b8cff, #7aa5ff);
+  background: var(--sp-progress-gradient);
   border-radius: 3px;
   transition: none;
   box-shadow: 0 0 10px rgba(91, 140, 255, 0.5);
 }
 .sp-rt-progress-pct {
-  color: #7d8899;
+  color: var(--sp-text-on-deep-muted);
   font: 700 18px ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: 1px;
   min-width: 56px;
 }
 /* 浅色模式进度条 */
 html:not([data-sp-dark='true']) .sp-rt-progress-bar {
-  background: rgba(47, 84, 235, 0.12);
+  background: rgba(var(--sp-brand-seed-rgb), 0.12);
 }
 html:not([data-sp-dark='true']) .sp-rt-progress-fill {
-  background: linear-gradient(90deg, #2f54eb, #5b8cff);
   box-shadow: 0 0 6px rgba(47, 84, 235, 0.3);
 }
 html:not([data-sp-dark='true']) .sp-rt-progress-pct {
+  /* TODO(对比度): 同 .sp-route-copy，历史值 2.54:1 */
   color: #98a0b0;
 }
 
@@ -376,35 +403,35 @@ html:not([data-sp-dark='true']) .sp-rt-progress-pct {
   gap: 6px;
 }
 .sp-rt-log-line {
-  color: #5b8cff;
+  color: var(--sp-accent);
   font: 400 18px ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: 0.5px;
   opacity: 0;
   animation: spRtLogIn 0.25s ease-out both;
 }
 .sp-rt-log-line:last-child {
-  color: #7aa5ff;
+  color: var(--sp-accent-strong);
   font-weight: 700;
 }
 /* 退出日志用暗红色 */
 .sp-rt-logout .sp-rt-log-line {
-  color: #c04545;
+  color: var(--sp-logout-text);
 }
 .sp-rt-logout .sp-rt-log-line:last-child {
-  color: #d06060;
+  color: var(--sp-logout-text-strong);
 }
 /* 浅色模式日志 */
 html:not([data-sp-dark='true']) .sp-rt-log-line {
-  color: #2f54eb;
+  color: var(--sp-accent);
 }
 html:not([data-sp-dark='true']) .sp-rt-log-line:last-child {
-  color: #1f3db8;
+  color: var(--sp-accent-strong);
 }
 html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-log-line {
-  color: #a03535;
+  color: var(--sp-logout-text);
 }
 html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-log-line:last-child {
-  color: #8b2a2a;
+  color: var(--sp-logout-text-strong);
 }
 
 @keyframes spRtLogIn {
@@ -424,9 +451,9 @@ html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-log-line:last-child {
 .sp-login-page .ant-input:hover,
 .sp-login-page .ant-input:focus,
 .sp-login-page .ant-input-focused {
-  background: rgba(122, 165, 255, 0.10) !important;
-  color: #e8ecf5 !important;
-  caret-color: #ffffff;
+  background: rgba(var(--sp-accent-light-rgb), 0.10) !important;
+  color: var(--sp-text-on-deep) !important;
+  caret-color: var(--sp-on-brand);
   box-shadow: none !important;
 }
 .sp-login-page .ant-input-affix-wrapper > input.ant-input,
@@ -435,7 +462,7 @@ html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-log-line:last-child {
 }
 .sp-login-page .ant-input::placeholder,
 .sp-login-page .ant-input-affix-wrapper input::placeholder {
-  color: rgba(255, 255, 255, 0.35) !important;
+  color: rgba(var(--sp-white-rgb), 0.35) !important;
 }
 .sp-login-page .ant-input-password .ant-input {
   background: transparent !important;
@@ -444,23 +471,23 @@ html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-log-line:last-child {
 .sp-login-page input:-webkit-autofill,
 .sp-login-page input:-webkit-autofill:hover,
 .sp-login-page input:-webkit-autofill:focus {
-  -webkit-text-fill-color: #e8ecf5;
+  -webkit-text-fill-color: var(--sp-text-on-deep);
   -webkit-box-shadow: 0 0 0 1000px rgba(30, 42, 66, 0.9) inset;
   transition: background-color 9999s ease-in-out 0s;
-  caret-color: #ffffff;
+  caret-color: var(--sp-on-brand);
 }
 
 /* 表格斑马纹（配合 rowClassName 使用） */
 .sp-table-row-striped > td {
-  background: #fafbfd !important;
+  background: var(--sp-stripe-row) !important;
 }
 
 /* 暗色模式下的斑马纹与全局底色 */
 html[data-sp-dark='true'] body {
-  background: #0f1420;
+  background: var(--sp-page);
 }
 html[data-sp-dark='true'] .sp-table-row-striped > td {
-  background: #161d2e !important;
+  background: var(--sp-stripe-row) !important;
 }
 
 /* 细滚动条 */
@@ -469,11 +496,11 @@ html[data-sp-dark='true'] .sp-table-row-striped > td {
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #c9d2e3;
+  background: var(--sp-scrollbar-thumb);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8b6d0;
+  background: var(--sp-scrollbar-thumb-hover);
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -481,10 +508,10 @@ html[data-sp-dark='true'] .sp-table-row-striped > td {
 
 /* 暗色模式滚动条 */
 html[data-sp-dark='true'] ::-webkit-scrollbar-thumb {
-  background: #2f3a52;
+  background: var(--sp-scrollbar-thumb);
 }
 html[data-sp-dark='true'] ::-webkit-scrollbar-thumb:hover {
-  background: #3e4c69;
+  background: var(--sp-scrollbar-thumb-hover);
 }
 
 /* React Flow 连线流动动画的虚线颜色微调 */
@@ -498,7 +525,7 @@ html[data-sp-dark='true'] ::-webkit-scrollbar-thumb:hover {
 .sp-content {
   background-image: radial-gradient(
     ellipse 70% 40% at 50% -8%,
-    rgba(47, 84, 235, 0.055),
+    rgba(var(--sp-brand-seed-rgb), 0.055),
     transparent 70%
   );
 }
@@ -574,6 +601,88 @@ html[data-sp-dark='true'] .sp-content .ant-card {
   25% { transform: translate(12px, -18px) scale(1.2); opacity: 0.6; }
   50% { transform: translate(-8px, -30px) scale(0.9); opacity: 0.4; }
   75% { transform: translate(6px, -12px) scale(1.1); opacity: 0.5; }
+}
+
+/* 侧边栏菜单项 hover：微放大（配合十字光标包住效果） */
+.sp-sider-item {
+  transition: transform 0.2s ease-out, background 0.18s;
+}
+.sp-sider-item:hover {
+  transform: scale(1.04);
+}
+.sp-sider-item.is-active:hover {
+  transform: scale(1.02);
+}
+
+/* 首页十字光标：隐藏系统光标（body 级，覆盖侧边栏等所有子元素） */
+body:has(.sp-home-crosshair),
+body:has(.sp-home-crosshair) * {
+  cursor: none !important;
+}
+
+/* 像素故障：Kylin 风格，离散 steps 闪烁 */
+@keyframes spPixelFault {
+  0%, 88%, 100% { opacity: 0; transform: translate(0); }
+  89% { opacity: 1; transform: translate(0); }
+  91% { opacity: 0.6; transform: translate(2px, -1px); }
+  93% { opacity: 1; transform: translate(-1px, 1px); }
+  95% { opacity: 0; transform: translate(0); }
+}
+
+/* 百叶窗扫出（登录/退出转场） */
+.sp-rt-shutters {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  pointer-events: none;
+}
+.sp-rt-shutters i {
+  display: block;
+  background: #0d1420;
+  transform: translateY(101%);
+  animation: spShutterRise 0.5s cubic-bezier(0.76, 0, 0.24, 1) forwards;
+}
+/* 深浅交替，中间一条用强调色 */
+.sp-rt-shutters i:nth-child(3n) {
+  background: #111a2e;
+}
+.sp-rt-shutters i:nth-child(5) {
+  background: #2f54eb;
+}
+html:not([data-sp-dark='true']) .sp-rt-shutters i {
+  background: #f3f5f9;
+}
+html:not([data-sp-dark='true']) .sp-rt-shutters i:nth-child(3n) {
+  background: #e8ecf5;
+}
+html:not([data-sp-dark='true']) .sp-rt-shutters i:nth-child(5) {
+  background: #2f54eb;
+}
+/* 退出转场：百叶窗用红色系 */
+.sp-rt-logout .sp-rt-shutters i {
+  background: #1a0a0a;
+}
+.sp-rt-logout .sp-rt-shutters i:nth-child(3n) {
+  background: #2a1010;
+}
+.sp-rt-logout .sp-rt-shutters i:nth-child(5) {
+  background: #c04545;
+}
+html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-shutters i {
+  background: #f5e8e8;
+}
+html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-shutters i:nth-child(3n) {
+  background: #edd5d5;
+}
+html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-shutters i:nth-child(5) {
+  background: #c04545;
+}
+
+@keyframes spShutterRise {
+  from { transform: translateY(101%); }
+  to   { transform: translateY(0); }
 }
 
 /* 尊重系统的「减少动态效果」设置 */

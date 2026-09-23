@@ -1,4 +1,4 @@
-import { Layout, Menu, Dropdown, Avatar, Space, Breadcrumb, Spin } from 'antd';
+import { Layout, Dropdown, Avatar, Space, Breadcrumb, Spin } from 'antd';
 import {
   AppstoreOutlined,
   UnorderedListOutlined,
@@ -24,11 +24,11 @@ const { Sider, Header, Content } = Layout;
 
 // 画布是作业的子页面（/jobs/:id/editor），从作业管理的「编辑画布」进入，不单列菜单
 const menuItems = [
-  { key: '/home', icon: <HomeOutlined />, label: '首页', adminOnly: false },
-  { key: '/jobs', icon: <UnorderedListOutlined />, label: '作业管理', adminOnly: false },
-  { key: '/components', icon: <AppstoreOutlined />, label: '控件列表', adminOnly: false },
-  { key: '/users', icon: <UserOutlined />, label: '用户管理', adminOnly: true },
-  { key: '/monitor', icon: <MonitorOutlined />, label: '运行监控', adminOnly: false },
+  { key: '/home', icon: <HomeOutlined />, label: '首页', sub: 'DASHBOARD', adminOnly: false },
+  { key: '/jobs', icon: <UnorderedListOutlined />, label: '作业管理', sub: 'JOB ORCHESTRATION', adminOnly: false },
+  { key: '/components', icon: <AppstoreOutlined />, label: '控件列表', sub: 'COMPONENT REGISTRY', adminOnly: false },
+  { key: '/users', icon: <UserOutlined />, label: '用户管理', sub: 'USER ADMINISTRATION', adminOnly: true },
+  { key: '/monitor', icon: <MonitorOutlined />, label: '运行监控', sub: 'RUNTIME MONITOR', adminOnly: false },
 ];
 
 export default function AppLayout() {
@@ -144,14 +144,129 @@ export default function AppLayout() {
               </span>
             </div>
           )}
-          <Menu
-            theme="dark"
-            mode="inline"
-            selectedKeys={[selectedKey]}
-            items={collapsed ? [] : visibleMenuItems}
-            onClick={({ key }) => transitionTo(key, { skipTransition: true })}
-            style={{ flex: 1, minHeight: 0 }}
-          />
+          {/* Kylin 风格章节导航：激活项展开 + 编号 + 左侧竖条 */}
+          {!collapsed && (
+            <nav style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 0' }}>
+              {visibleMenuItems.map((item, i) => {
+                const isActive = selectedKey === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className={`sp-sider-item ${isActive ? 'is-active' : ''}`}
+                    onClick={() => transitionTo(item.key, { skipTransition: true })}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: isActive ? 'flex-end' : 'center',
+                      alignItems: 'flex-start',
+                      width: '100%',
+                      height: isActive ? 96 : 52,
+                      padding: isActive ? '0 14px 14px 18px' : '0 10px 0 56px',
+                      border: 'none',
+                      borderBottom: '1px solid rgba(255,255,255,.06)',
+                      background: isActive ? 'rgba(47,84,235,.12)' : 'transparent',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      transition: 'height 0.4s cubic-bezier(.22,1,.36,1), background 0.18s, padding 0.35s cubic-bezier(.22,1,.36,1)',
+                      font: 'inherit',
+                      color: 'inherit',
+                      textAlign: 'left',
+                    }}
+                  >
+                    {/* 左侧强调色竖条（仅激活） */}
+                    {isActive && (
+                      <span
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: 3,
+                          background: '#5b8cff',
+                        }}
+                      />
+                    )}
+                    {/* 编号 */}
+                    <span
+                      style={{
+                        position: isActive ? 'absolute' : 'absolute',
+                        left: isActive ? 14 : 14,
+                        top: isActive ? 12 : '50%',
+                        transform: isActive ? 'none' : 'translateY(-50%)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                        lineHeight: 1,
+                        transition: 'top 0.35s cubic-bezier(.22,1,.36,1), transform 0.35s cubic-bezier(.22,1,.36,1)',
+                        zIndex: 0,
+                      }}
+                    >
+                      <i
+                        style={{
+                          fontSize: isActive ? 9 : 7,
+                          fontStyle: 'normal',
+                          fontWeight: 700,
+                          color: isActive ? 'rgba(91,140,255,.3)' : 'rgba(255,255,255,.25)',
+                          fontFamily: 'ui-monospace, monospace',
+                          letterSpacing: 1,
+                          transition: 'font-size 0.35s, color 0.18s',
+                        }}
+                      >
+                        {isActive ? 'CHAPTER' : `${String(i).padStart(2, '0')}`}
+                      </i>
+                      <b
+                        style={{
+                          fontSize: isActive ? 28 : 16,
+                          fontWeight: 800,
+                          color: isActive ? 'rgba(91,140,255,.2)' : 'rgba(255,255,255,.15)',
+                          fontFamily: 'ui-monospace, monospace',
+                          marginTop: 2,
+                          transition: 'font-size 0.35s, color 0.18s',
+                        }}
+                      >
+                        {String(i).padStart(2, '0')}
+                      </b>
+                    </span>
+                    {/* 中文标签 */}
+                    <span
+                      style={{
+                        position: 'relative',
+                        zIndex: 1,
+                        fontSize: isActive ? 14 : 13,
+                        fontWeight: 700,
+                        color: isActive ? '#5b8cff' : 'rgba(255,255,255,.72)',
+                        transition: 'color 0.18s, font-size 0.3s',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {item.label}
+                    </span>
+                    {/* 英文小字（仅激活展开时可见） */}
+                    <small
+                      style={{
+                        position: 'relative',
+                        zIndex: 1,
+                        fontSize: 8,
+                        fontWeight: 600,
+                        color: isActive ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.2)',
+                        fontFamily: 'ui-monospace, monospace',
+                        letterSpacing: 1,
+                        opacity: isActive ? 1 : 0,
+                        maxHeight: isActive ? 16 : 0,
+                        transform: isActive ? 'none' : 'translateY(4px)',
+                        transition: 'opacity 0.18s, max-height 0.3s, transform 0.3s',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {item.sub}
+                    </small>
+                  </button>
+                );
+              })}
+            </nav>
+          )}
         </Sider>
         {/* 悬停任务栏区域时出现折叠/展开按钮 */}
         {siderHover && (

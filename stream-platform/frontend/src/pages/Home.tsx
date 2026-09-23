@@ -390,8 +390,100 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
 
   const sel = selected !== null ? getConnected(selected) : null;
 
+  // 鼠标磁性吸附：只有光标正下方的那一个节点跟随光标微移，整张图和其余节点都不动
+  const svgRef = useRef<SVGSVGElement>(null);
+  const mousePos = useRef<{ x: number; y: number } | null>(null);
+  const [offsets, setOffsets] = useState<Map<number, { dx: number; dy: number }>>(new Map());
+  const rafRef = useRef<number>(0);
+
+  // 节点列表放进 ref：节点淡入淡出会逐帧重建数组，若直接依赖 topo.nodes，
+  // 下面的鼠标 effect 就会每一帧解绑重绑（旧实现的性能隐患）。
+  const nodesRef = useRef(topo.nodes);
+  useEffect(() => {
+    nodesRef.current = topo.nodes;
+  }, [topo.nodes]);
+
+  useEffect(() => {
+    if (reduced) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const ACQUIRE = 34;  // 光标进入该半径即吸附（SVG 坐标，节点 r=22）
+    const MAX_PULL = 9;  // 节点最大位移（px）
+    const LERP = 0.18;   // 平滑系数
+
+    const onMove = (e: MouseEvent) => {
+      const rect = svg.getBoundingClientRect();
+      // 转换到 SVG viewBox 坐标系
+      mousePos.current = {
+        x: ((e.clientX - rect.left) / rect.width) * W,
+        y: ((e.clientY - rect.top) / rect.height) * H,
+      };
+    };
+    const onLeave = () => { mousePos.current = null; };
+
+    const tick = () => {
+      const mp = mousePos.current;
+
+      // 每帧只挑出「光标正下方」最近的那一个节点，作为唯一位移目标
+      const targets = new Map<number, { dx: number; dy: number }>();
+      if (mp) {
+        let hovered: TopoNode | null = null;
+        let best = ACQUIRE;
+        for (const n of nodesRef.current) {
+          if (n.dying) continue;
+          const d = Math.hypot(n.x - mp.x, n.y - mp.y);
+          if (d < best) { best = d; hovered = n; }
+        }
+        if (hovered) {
+          const dx = mp.x - hovered.x;
+          const dy = mp.y - hovered.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 0.001) {
+            const pull = Math.min(dist, MAX_PULL);
+            targets.set(hovered.id, { dx: (dx / dist) * pull, dy: (dy / dist) * pull });
+          }
+        }
+      }
+
+      setOffsets((prev) => {
+        const next = new Map<number, { dx: number; dy: number }>();
+        for (const n of nodesRef.current) {
+          const cur = prev.get(n.id) ?? { dx: 0, dy: 0 };
+          const t = targets.get(n.id) ?? { dx: 0, dy: 0 };
+          let dx = cur.dx + (t.dx - cur.dx) * LERP;
+          let dy = cur.dy + (t.dy - cur.dy) * LERP;
+          // 足够接近 0 就归零，避免永远收敛不到的抖动
+          if (Math.abs(dx) < 0.05) dx = 0;
+          if (Math.abs(dy) < 0.05) dy = 0;
+          next.set(n.id, { dx, dy });
+        }
+        // 完全无变化时返回原对象，避免每帧触发一次重渲染
+        let changed = next.size !== prev.size;
+        if (!changed) {
+          for (const [id, o] of next) {
+            const p = prev.get(id);
+            if (!p || p.dx !== o.dx || p.dy !== o.dy) { changed = true; break; }
+          }
+        }
+        return changed ? next : prev;
+      });
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    svg.addEventListener('mousemove', onMove);
+    svg.addEventListener('mouseleave', onLeave);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      svg.removeEventListener('mousemove', onMove);
+      svg.removeEventListener('mouseleave', onLeave);
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [reduced]);
+
   return (
     <svg
+      ref={svgRef}
       viewBox={`0 0 ${W} ${H}`}
       style={{ width: '100%', maxWidth: 960, height: 'auto', display: 'block', margin: '0 auto', cursor: 'pointer' }}
       onClick={() => setSelected(null)}
@@ -406,19 +498,25 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
         </filter>
       </defs>
 
-      {/* 边（曲线） */}
+      {/* 边（曲线）——端点跟随节点偏移 */}
       {topo.edges.map((e, i) => {
         const from = topo.nodes.find((n) => n.id === e.from);
         const to = topo.nodes.find((n) => n.id === e.to);
         if (!from || !to) return null;
+        const fromOff = offsets.get(from.id) ?? { dx: 0, dy: 0 };
+        const toOff = offsets.get(to.id) ?? { dx: 0, dy: 0 };
+        const fx = from.x + fromOff.dx;
+        const fy = from.y + fromOff.dy;
+        const tx2 = to.x + toOff.dx;
+        const ty2 = to.y + toOff.dy;
         const isHighlighted = sel ? sel.connectedEdges.has(i) : false;
         const isDimmed = sel ? !isHighlighted : false;
         const isHovered = hoverEdge === i;
         const stroke = isDimmed ? dimmed : isHovered || isHighlighted ? lineHighlight : lineColor;
         const sw = isHovered || isHighlighted ? 2.5 : 1.5;
-        const d = curvePath(from.x, from.y, to.x, to.y);
-        const midX = (from.x + to.x) / 2;
-        const midY = (from.y + to.y) / 2 - 14;
+        const d = curvePath(fx, fy, tx2, ty2);
+        const midX = (fx + tx2) / 2;
+        const midY = (fy + ty2) / 2 - 14;
 
         return (
           <g key={`e-${i}`}>
@@ -468,7 +566,7 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
         );
       })}
 
-      {/* 节点 */}
+      {/* 节点：球 + 文字 + 提示作为一组刚体位移（偏移加在 <g> 上，不能只挪文字） */}
       {topo.nodes.map((n) => {
         const isSelected = selected === n.id;
         const isConnected = sel ? sel.connectedNodes.has(n.id) : false;
@@ -476,17 +574,21 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
         const r = isSelected ? 26 : 22;
         const fill = isDimmed ? dimFill : nodeBg;
         const stroke = isDimmed ? dimmed : nodeColor;
+        const offset = offsets.get(n.id) ?? { dx: 0, dy: 0 };
 
         return (
           <g
             key={n.id}
             opacity={n.opacity}
+            transform={`translate(${offset.dx} ${offset.dy})`}
             onClick={(ev) => {
               ev.stopPropagation();
               setSelected((prev) => (prev === n.id ? null : n.id));
             }}
             style={{ cursor: 'pointer' }}
           >
+            {/* 只过渡颜色/线宽：原先写 transition: all，SVG 几何属性 cx/cy 也会被过渡，
+                会和逐帧的位移 lerp 打架，圆在原地"打滑"，看起来就像只有文字在动。 */}
             <circle
               cx={n.x}
               cy={n.y}
@@ -495,7 +597,7 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
               stroke={stroke}
               strokeWidth={isSelected ? 2.5 : 1.5}
               filter={isSelected ? 'url(#sp-glow)' : undefined}
-              style={{ transition: 'all 0.25s' }}
+              style={{ transition: 'fill 0.25s, stroke 0.25s, stroke-width 0.25s' }}
             />
             <text
               x={n.x}
@@ -566,6 +668,148 @@ function Particles({ color }: { color: string }) {
   );
 }
 
+/* ========== 像素故障小色块（Kylin 风格） ========== */
+
+/** 预生成故障块配置：位置/大小/动画时长/延迟/颜色层级 */
+const GLITCH_BLOCKS = Array.from({ length: 8 }, (_, i) => ({
+  id: i,
+  x: 5 + Math.random() * 90,   // % 位置
+  y: 5 + Math.random() * 85,
+  w: 12 + Math.random() * 40,  // px 宽
+  h: 3 + Math.random() * 10,   // px 高
+  dur: 6 + Math.random() * 6,  // 动画周期 s
+  delay: Math.random() * -8,   // 随机相位
+  tier: i % 3,                  // 0=亮 1=中 2=暗
+}));
+
+function GlitchBlocks({ dark }: { dark: boolean }) {
+  // 三种亮度层级，深色/浅色模式分别适配
+  const colors = dark
+    ? ['rgba(46,232,160,.35)', 'rgba(46,232,160,.18)', 'rgba(46,232,160,.08)']
+    : ['rgba(47,84,235,.25)', 'rgba(47,84,235,.12)', 'rgba(47,84,235,.05)'];
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
+      {GLITCH_BLOCKS.map((b) => (
+        <div
+          key={b.id}
+          style={{
+            position: 'absolute',
+            left: `${b.x}%`,
+            top: `${b.y}%`,
+            width: b.w,
+            height: b.h,
+            background: colors[b.tier],
+            mixBlendMode: 'screen',
+            animation: `spPixelFault ${b.dur}s steps(2,end) ${b.delay}s infinite`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ========== 十字光标（Kylin 风格，仅首页） ========== */
+
+/** 光标状态：默认小十字 / 包住目标元素 */
+interface CursorState {
+  x: number;
+  y: number;
+  /** 目标元素的包围盒（有则四角分开包住） */
+  targetRect: { x: number; y: number; w: number; h: number } | null;
+}
+
+function CrosshairCursor({ dark }: { dark: boolean }) {
+  const cursorRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  const [state, setState] = useState<CursorState>({ x: 0, y: 0, targetRect: null });
+
+  useEffect(() => {
+    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+
+    const onMove = (e: MouseEvent) => {
+      setVisible(true);
+      const target = e.target as HTMLElement;
+      // 检测可交互元素：按钮、链接、卡片、侧边栏菜单项
+      const interactive = target.closest(
+        'button, a, [role="button"], input, .sp-quick-card, .sp-sider-item, svg circle',
+      );
+
+      if (interactive) {
+        const rect = interactive.getBoundingClientRect();
+        setState({
+          x: e.clientX,
+          y: e.clientY,
+          targetRect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height },
+        });
+      } else {
+        setState({ x: e.clientX, y: e.clientY, targetRect: null });
+      }
+    };
+    const onLeave = () => setVisible(false);
+
+    document.addEventListener('mousemove', onMove);
+    document.documentElement.addEventListener('mouseleave', onLeave);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.documentElement.removeEventListener('mouseleave', onLeave);
+    };
+  }, []);
+
+  if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return null;
+
+  const color = dark ? 'rgba(255,255,255,.75)' : 'rgba(0,0,0,.6)';
+  const dotColor = dark ? '#fff' : '#000';
+  const GAP = 4; // 四角和目标边缘的间距
+  const CORNER = 8; // 角括号边长
+
+  // 有目标时：四角分开包住目标；无目标时：小十字跟随光标
+  const t = state.targetRect;
+  const w = t ? t.w + GAP * 2 : 20;
+  const h = t ? t.h + GAP * 2 : 20;
+  const cx = t ? t.x + t.w / 2 : state.x;
+  const cy = t ? t.y + t.h / 2 : state.y;
+
+  return (
+    <div
+      ref={cursorRef}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: w,
+        height: h,
+        pointerEvents: 'none',
+        zIndex: 9999,
+        opacity: visible ? 1 : 0,
+        transition: 'opacity 0.15s, width 0.2s ease-out, height 0.2s ease-out',
+        transform: `translate(${cx - w / 2}px, ${cy - h / 2}px)`,
+      }}
+    >
+      {/* 四个角括号 */}
+      <span style={{ position: 'absolute', top: 0, left: 0, width: CORNER, height: CORNER, borderTop: `2px solid ${color}`, borderLeft: `2px solid ${color}` }} />
+      <span style={{ position: 'absolute', top: 0, right: 0, width: CORNER, height: CORNER, borderTop: `2px solid ${color}`, borderRight: `2px solid ${color}` }} />
+      <span style={{ position: 'absolute', bottom: 0, left: 0, width: CORNER, height: CORNER, borderBottom: `2px solid ${color}`, borderLeft: `2px solid ${color}` }} />
+      <span style={{ position: 'absolute', bottom: 0, right: 0, width: CORNER, height: CORNER, borderBottom: `2px solid ${color}`, borderRight: `2px solid ${color}` }} />
+      {/* 中心点（包住目标时隐藏） */}
+      <span
+        style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          width: 3,
+          height: 3,
+          background: dotColor,
+          transform: 'translate(-50%, -50%) rotate(45deg)',
+          boxShadow: `0 0 8px ${dotColor}`,
+          opacity: t ? 0 : 1,
+          transition: 'opacity 0.15s',
+        }}
+      />
+    </div>
+  );
+}
+
 /* ========== 首页组件 ========== */
 
 /**
@@ -577,15 +821,18 @@ function QuickCard({
   icon,
   label,
   desc,
+  index,
   onClick,
   palette,
 }: {
   icon: React.ReactNode;
   label: string;
   desc: string;
+  index: number;
   onClick: () => void;
   palette: HomePalette;
 }) {
+  const no = `0${index + 1}`;
   return (
     <button
       type="button"
@@ -599,13 +846,39 @@ function QuickCard({
         cursor: 'pointer',
         textAlign: 'center',
         font: 'inherit',
+        position: 'relative',
+        overflow: 'hidden',
         ['--sp-quick-border-hover' as string]: palette.cardHoverBorder,
         ['--sp-quick-shadow-hover' as string]: palette.cardHoverShadow,
+        ['--sp-quick-accent' as string]: palette.accent,
+        ['--sp-quick-card-bg' as string]: palette.cardBg,
+        ['--sp-quick-text-primary' as string]: palette.textPrimary,
+        ['--sp-quick-text-secondary' as string]: palette.textSecondary,
       }}
     >
-      <div style={{ fontSize: 24, color: palette.accent, marginBottom: 8 }}>{icon}</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: palette.textPrimary, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 12, color: palette.textSecondary }}>{desc}</div>
+      {/* 超大半透明编号装饰（右下角） */}
+      <span
+        aria-hidden
+        style={{
+          position: 'absolute',
+          bottom: -12,
+          right: 8,
+          fontSize: 72,
+          fontWeight: 800,
+          fontFamily: 'ui-monospace, monospace',
+          fontStyle: 'italic',
+          lineHeight: 1,
+          color: palette.accent,
+          opacity: 0.07,
+          pointerEvents: 'none',
+          transition: 'opacity 0.25s',
+        }}
+      >
+        {no}
+      </span>
+      <div style={{ fontSize: 24, color: palette.accent, marginBottom: 8, position: 'relative', zIndex: 1 }}>{icon}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: palette.textPrimary, marginBottom: 4, position: 'relative', zIndex: 1 }}>{label}</div>
+      <div style={{ fontSize: 12, color: palette.textSecondary, position: 'relative', zIndex: 1 }}>{desc}</div>
     </button>
   );
 }
@@ -637,6 +910,7 @@ export default function Home() {
 
   return (
     <div
+      className="sp-home-crosshair"
       style={{
         minHeight: '100%',
         background: palette.pageBg,
@@ -650,6 +924,8 @@ export default function Home() {
       }}
     >
       <Particles color={palette.particle} />
+      <GlitchBlocks dark={dark} />
+      <CrosshairCursor dark={dark} />
 
       {/* 顶部标签 */}
       <div
@@ -667,19 +943,40 @@ export default function Home() {
         SYSTEM / ONLINE
       </div>
 
-      {/* 主标题 */}
+      {/* 主标题：Kylin 风格——第一行描边空心，第二行实心 */}
       <h1
         style={{
-          fontSize: 'clamp(28px, 3.5vw, 42px)',
-          fontWeight: 900,
-          color: palette.textPrimary,
           margin: '0 0 6px',
-          letterSpacing: 1,
           position: 'relative',
           zIndex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          lineHeight: 1.1,
         }}
       >
-        通用流处理任务管理平台
+        <span
+          style={{
+            fontSize: 'clamp(36px, 4.5vw, 55px)',
+            fontWeight: 600,
+            letterSpacing: 2,
+            color: 'transparent',
+            WebkitTextStroke: `1px ${dark ? 'rgba(244,250,248,.55)' : 'rgba(26,35,50,.45)'}`,
+          }}
+        >
+          通用流处理
+        </span>
+        <span
+          style={{
+            fontSize: 'clamp(44px, 5.5vw, 68px)',
+            fontWeight: 900,
+            letterSpacing: 1,
+            color: palette.textPrimary,
+            marginTop: -2,
+          }}
+        >
+          任务管理平台
+        </span>
       </h1>
       <p
         style={{
@@ -751,12 +1048,13 @@ export default function Home() {
           zIndex: 1,
         }}
       >
-        {QUICK_LINKS.map((link) => (
+        {QUICK_LINKS.map((link, i) => (
           <QuickCard
             key={link.label}
             icon={link.icon}
             label={link.label}
             desc={link.desc}
+            index={i}
             onClick={() => transitionTo(link.path)}
             palette={palette}
           />

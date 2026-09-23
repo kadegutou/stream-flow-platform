@@ -47,7 +47,7 @@ const COVER_MS = 600;
 // 普通路由转场原为 600 + 800 = 1.4s，切页显得迟钝；压缩到 380 + 520 = 0.9s
 const ROUTE_COVER_MS = 380;
 const ROUTE_REVEAL_MS = 520;
-const AUTH_REVEAL_MS = 400; // 登录/退出扫出更快
+const AUTH_REVEAL_MS = 1590; // 登录/退出扫出（百叶窗 920ms + 停 150ms + 滑出 520ms）
 const LOGIN_LOAD_MS = 2400;
 const LOGOUT_LOAD_MS = 1600;
 const LINE_EXIT_MS = 250; // 线条退出动画时长（速度翻倍）
@@ -375,6 +375,14 @@ export function RouteTransitionProvider({ children }: { children: ReactNode }) {
             </div>
           )}
           <em className={emPosClass}>{info.no}</em>
+          {/* 百叶窗扫出（仅登录/退出转场） */}
+          {isAuth && phase === 'entering' && (
+            <div className="sp-rt-shutters">
+              {Array.from({ length: 8 }, (_, i) => (
+                <i key={i} style={{ animationDelay: `${i * 60}ms` }} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </Ctx.Provider>
