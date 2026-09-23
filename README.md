@@ -24,7 +24,7 @@
 |---|---|
 | 控制面 | Java 21、Spring Boot 3、Spring Data JPA、JWT |
 | 数据面 | Java 21 虚拟线程、插件化执行引擎 |
-| 前端 | React 18、TypeScript、React Flow、Ant Design 5 |
+| 前端 | React 18、TypeScript、React Flow、Ant Design 5、Vite 5（ESLint + Vitest） |
 | 存储/协调 | MySQL 8（元数据 + 调度协调）、H2（开发模式） |
 | 外部组件 | Kafka、Redis、Apache POI、Hadoop HDFS Client |
 
@@ -86,6 +86,12 @@ java -jar sp-control-plane/target/sp-control-plane-1.0.0.jar --spring.profiles.a
 ```bash
 # 单元测试
 mvn test
+
+# 前端静态检查 + 单元测试（DAG 校验 / 自动布局 / 参数必填判断）
+cd frontend
+npm run lint        # ESLint（含 react-hooks 依赖数组校验），当前 0 error
+npm run typecheck   # tsc 类型检查
+npm test            # Vitest，14 个用例
 
 # 端到端冒烟（10 万行 csv → 字段拼接 → csv）
 bash scripts/smoke.sh
