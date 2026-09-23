@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouteTransition } from '../components/RouteTransition';
 import { useThemeStore } from '../store/theme';
 import { prefersReducedMotion, usePrefersReducedMotion } from '../utils/motion';
+import { homePalette, type HomePalette } from '../theme/home';
 import {
   UnorderedListOutlined,
   AppstoreOutlined,
@@ -217,7 +218,7 @@ function curvePath(x1: number, y1: number, x2: number, y2: number): string {
 }
 
 /** 拓扑图组件 */
-function TopoGraph({ dark }: { dark: boolean }) {
+function TopoGraph({ palette }: { palette: HomePalette }) {
   const W = 900, H = 320;
   const reduced = usePrefersReducedMotion();
   // 关闭动画时节点直接以完全不透明起步，避免一直停在 opacity 0（节点不可见）
@@ -226,13 +227,8 @@ function TopoGraph({ dark }: { dark: boolean }) {
   const [hoverEdge, setHoverEdge] = useState<number | null>(null);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const nodeColor = dark ? '#2ee8a0' : '#7c3aed';
-  const nodeBg = dark ? '#0a1e14' : '#ede4f8';
-  const lineColor = dark ? 'rgba(46,232,160,.28)' : 'rgba(124,58,237,.22)';
-  const lineHighlight = dark ? 'rgba(46,232,160,.85)' : 'rgba(124,58,237,.65)';
-  const dotColor = dark ? '#4ef0b8' : '#8b5cf6';
-  const textColor = dark ? '#5ac898' : '#6a4a9e';
-  const dimmed = dark ? 'rgba(46,232,160,.05)' : 'rgba(124,58,237,.03)';
+  const { node: nodeColor, nodeFill: nodeBg, dimFill, dimmed, line: lineColor, lineHighlight, dot: dotColor, tip: textColor } =
+    palette.graph;
 
   const clearTimers = () => {
     timersRef.current.forEach(clearTimeout);
@@ -478,7 +474,7 @@ function TopoGraph({ dark }: { dark: boolean }) {
         const isConnected = sel ? sel.connectedNodes.has(n.id) : false;
         const isDimmed = sel ? !isConnected : false;
         const r = isSelected ? 26 : 22;
-        const fill = isDimmed ? (dark ? '#111822' : '#f0f1f5') : nodeBg;
+        const fill = isDimmed ? dimFill : nodeBg;
         const stroke = isDimmed ? dimmed : nodeColor;
 
         return (
@@ -548,9 +544,7 @@ const PARTICLES = Array.from({ length: 25 }, (_, i) => ({
   delay: Math.random() * -20,
 }));
 
-function Particles({ dark }: { dark: boolean }) {
-  const color = dark ? 'rgba(46,232,160,.1)' : 'rgba(124,58,237,.07)';
-
+function Particles({ color }: { color: string }) {
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
       {PARTICLES.map((p) => (
@@ -584,19 +578,13 @@ function QuickCard({
   label,
   desc,
   onClick,
-  dark,
-  accentColor,
-  textPrimary,
-  textSecondary,
+  palette,
 }: {
   icon: React.ReactNode;
   label: string;
   desc: string;
   onClick: () => void;
-  dark: boolean;
-  accentColor: string;
-  textPrimary: string;
-  textSecondary: string;
+  palette: HomePalette;
 }) {
   return (
     <button
@@ -604,24 +592,20 @@ function QuickCard({
       className="sp-quick-card"
       onClick={onClick}
       style={{
-        background: dark ? '#0d1822' : '#fff',
-        border: `1px solid ${dark ? 'rgba(62,207,192,.22)' : 'rgba(124,58,237,.14)'}`,
+        background: palette.cardBg,
+        border: `1px solid ${palette.cardBorder}`,
         borderRadius: 10,
         padding: '20px 16px',
         cursor: 'pointer',
         textAlign: 'center',
         font: 'inherit',
-        ['--sp-quick-border-hover' as string]: dark
-          ? 'rgba(62,207,192,.55)'
-          : 'rgba(124,58,237,.45)',
-        ['--sp-quick-shadow-hover' as string]: dark
-          ? '0 4px 20px rgba(46,232,160,.15)'
-          : '0 4px 20px rgba(124,58,237,.12)',
+        ['--sp-quick-border-hover' as string]: palette.cardHoverBorder,
+        ['--sp-quick-shadow-hover' as string]: palette.cardHoverShadow,
       }}
     >
-      <div style={{ fontSize: 24, color: accentColor, marginBottom: 8 }}>{icon}</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: textPrimary, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 12, color: textSecondary }}>{desc}</div>
+      <div style={{ fontSize: 24, color: palette.accent, marginBottom: 8 }}>{icon}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: palette.textPrimary, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 12, color: palette.textSecondary }}>{desc}</div>
     </button>
   );
 }
@@ -648,20 +632,15 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [reduced]);
 
-  const bgColor = dark ? '#050a10' : '#dde3ec';
-  const textPrimary = dark ? '#f4faf8' : '#1a2332';
-  const textSecondary = dark ? '#6ab8ac' : '#6a4a9e';
-  const accentColor = dark ? '#3ecfc0' : '#7c3aed';
-  const glowBg = dark
-    ? 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(62,207,192,.08), transparent)'
-    : 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(124,58,237,.06), transparent)';
+  // 首页配色集中到 src/theme/home.ts：暗色青绿、浅色品牌蓝
+  const palette = homePalette(dark);
 
   return (
     <div
       style={{
         minHeight: '100%',
-        background: bgColor,
-        backgroundImage: glowBg,
+        background: palette.pageBg,
+        backgroundImage: palette.glow,
         padding: '40px 40px 32px',
         display: 'flex',
         flexDirection: 'column',
@@ -670,7 +649,7 @@ export default function Home() {
         position: 'relative',
       }}
     >
-      <Particles dark={dark} />
+      <Particles color={palette.particle} />
 
       {/* 顶部标签 */}
       <div
@@ -679,7 +658,7 @@ export default function Home() {
           fontSize: 12,
           fontWeight: 700,
           letterSpacing: 2,
-          color: textSecondary,
+          color: palette.textSecondary,
           marginBottom: 10,
           position: 'relative',
           zIndex: 1,
@@ -693,7 +672,7 @@ export default function Home() {
         style={{
           fontSize: 'clamp(28px, 3.5vw, 42px)',
           fontWeight: 900,
-          color: textPrimary,
+          color: palette.textPrimary,
           margin: '0 0 6px',
           letterSpacing: 1,
           position: 'relative',
@@ -705,7 +684,7 @@ export default function Home() {
       <p
         style={{
           fontSize: 13,
-          color: textSecondary,
+          color: palette.textSecondary,
           fontFamily: 'ui-monospace, monospace',
           letterSpacing: 1,
           margin: '0 0 32px',
@@ -718,7 +697,7 @@ export default function Home() {
 
       {/* 动态拓扑图 */}
       <div style={{ width: '100%', maxWidth: 960, marginBottom: 24, position: 'relative', zIndex: 1 }}>
-        <TopoGraph dark={dark} />
+        <TopoGraph palette={palette} />
       </div>
 
       {/* 滚动日志（演示样例：文案只写平台真实具备的能力） */}
@@ -729,7 +708,7 @@ export default function Home() {
           fontFamily: 'ui-monospace, monospace',
           fontSize: 12,
           letterSpacing: 1,
-          color: textSecondary,
+          color: palette.textSecondary,
           opacity: 0.8,
           marginBottom: 6,
           position: 'relative',
@@ -747,8 +726,8 @@ export default function Home() {
           fontFamily: 'ui-monospace, monospace',
           fontSize: 12,
           lineHeight: 1.8,
-          color: accentColor,
-          opacity: 0.75,
+          // 原来用强调色 + opacity .75，浅色下实际对比度只有约 3.2:1；改用深一档的 logText 并去掉透明度
+          color: palette.logText,
           position: 'relative',
           zIndex: 1,
         }}
@@ -779,10 +758,7 @@ export default function Home() {
             label={link.label}
             desc={link.desc}
             onClick={() => transitionTo(link.path)}
-            dark={dark}
-            accentColor={accentColor}
-            textPrimary={textPrimary}
-            textSecondary={textSecondary}
+            palette={palette}
           />
         ))}
       </div>
