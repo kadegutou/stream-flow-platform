@@ -53,6 +53,20 @@ mvn -DskipTests package
 
 ### 启动（开发模式，内置 H2 内存库，无需安装数据库）
 
+**方式一：一键脚本（推荐）**
+
+```bash
+bash scripts/platform.sh start     # 启动控制面 + Worker + 前端
+bash scripts/platform.sh status    # 查看状态（进程 / 端口 / 健康检查）
+bash scripts/platform.sh stop      # 停止全部
+bash scripts/platform.sh restart   # 重启全部
+bash scripts/platform.sh logs cp   # 跟踪日志（cp 控制面 / wk Worker / fe 前端）
+```
+
+脚本会自动检查 jar 是否存在、**Java 源码是否比 jar 新**（提醒重新打包）、前端依赖是否已装。
+
+**方式二：三个终端分别启动**
+
 ```bash
 # 终端 1：控制面（端口 8080）
 java -jar sp-control-plane/target/sp-control-plane-1.0.0.jar
