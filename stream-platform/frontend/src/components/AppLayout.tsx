@@ -288,11 +288,35 @@ export default function AppLayout() {
             alignItems: 'center',
             boxShadow: '0 1px 4px rgba(0,21,41,.08)',
             borderBottom: `1px solid ${p.borderHairline}`,
+            height: 48,
+            lineHeight: '48px',
           }}
         >
-          {/* 左侧：当前位置（原为空白，进系统后缺少方位感） */}
-          <Breadcrumb items={breadcrumbItems} style={{ fontSize: 13 }} />
-          <Space size={20}>
+          {/* 左侧：终端风格路径标签 */}
+          <div
+            style={{
+              fontFamily: 'ui-monospace, monospace',
+              fontSize: 11,
+              letterSpacing: 1,
+              color: p.textSubtle,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <span style={{ color: p.accent, fontWeight: 700 }}>SP</span>
+            <span style={{ opacity: 0.4 }}>/</span>
+            <Breadcrumb
+              items={breadcrumbItems}
+              style={{
+                fontSize: 11,
+                fontFamily: 'ui-monospace, monospace',
+                letterSpacing: 1,
+                lineHeight: '48px',
+              }}
+            />
+          </div>
+          <Space size={16}>
             {/* 字体缩放 */}
             <Space size={4}>
               <IconActionButton
@@ -308,7 +332,8 @@ export default function AppLayout() {
               <span
                 aria-live="polite"
                 style={{
-                  fontSize: 11,
+                  fontSize: 10,
+                  fontFamily: 'ui-monospace, monospace',
                   color: p.textSubtle,
                   minWidth: 32,
                   textAlign: 'center',
@@ -332,26 +357,49 @@ export default function AppLayout() {
             <IconActionButton
               label={dark ? '切换为浅色模式' : '切换为暗色模式'}
               onClick={toggle}
-              // 太阳图标用固定的暖黄，不随品牌色走
               color={dark ? '#f5c518' : p.textMuted}
               fontSize={17}
             >
               {dark ? <SunOutlined /> : <MoonOutlined />}
             </IconActionButton>
+            {/* 分隔线 */}
+            <span style={{ width: 1, height: 20, background: p.borderHairline }} />
+            {/* 用户区：等宽字体紧凑布局 */}
             <Dropdown
               menu={{
                 items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: handleLogout }],
               }}
             >
-              <Space style={{ cursor: 'pointer', color: dark ? p.text : undefined }}>
-                <Avatar icon={<UserOutlined />} />
-                <span>{nickname || '用户'}</span>
+              <div
+                style={{
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontFamily: 'ui-monospace, monospace',
+                  fontSize: 11,
+                  letterSpacing: 0.5,
+                  color: dark ? p.text : undefined,
+                }}
+              >
+                <Avatar size={24} icon={<UserOutlined />} />
+                <span style={{ fontWeight: 700 }}>{nickname || '用户'}</span>
                 {role && (
-                  <span style={{ color: p.textSubtle, fontSize: 12 }}>
-                    ({role === 'ADMIN' ? '管理员' : '普通用户'})
+                  <span
+                    style={{
+                      fontSize: 8,
+                      fontWeight: 700,
+                      color: p.accent,
+                      background: dark ? 'rgba(47,84,235,.15)' : 'rgba(47,84,235,.08)',
+                      padding: '1px 5px',
+                      borderRadius: 2,
+                      letterSpacing: 1,
+                    }}
+                  >
+                    {role}
                   </span>
                 )}
-              </Space>
+              </div>
             </Dropdown>
           </Space>
         </Header>

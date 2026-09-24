@@ -12,10 +12,10 @@ import {
 
 /** 快捷入口卡片 */
 const QUICK_LINKS = [
-  { path: '/jobs', icon: <UnorderedListOutlined />, label: '作业管理', desc: '编排与调度流处理作业' },
-  { path: '/components', icon: <AppstoreOutlined />, label: '控件列表', desc: '20+ 种数据处理控件' },
-  { path: '/monitor', icon: <MonitorOutlined />, label: '运行监控', desc: '实时指标与集群状态' },
-  { path: '/jobs', icon: <EditOutlined />, label: '编辑画布', desc: '从作业列表进入画布' },
+  { path: '/jobs', icon: <UnorderedListOutlined />, label: '作业管理', sub: 'JOBS', desc: '编排与调度流处理作业' },
+  { path: '/components', icon: <AppstoreOutlined />, label: '控件列表', sub: 'REGISTRY', desc: '20+ 种数据处理控件' },
+  { path: '/monitor', icon: <MonitorOutlined />, label: '运行监控', sub: 'METRICS', desc: '实时指标与集群状态' },
+  { path: '/jobs', icon: <EditOutlined />, label: '编辑画布', sub: 'CANVAS', desc: '从作业列表进入画布' },
 ];
 
 /**
@@ -498,6 +498,24 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
         </filter>
       </defs>
 
+      {/* 元信息标签（Kylin 风格） */}
+      {/* 左上角：拓扑标识 */}
+      <text x={8} y={16} fill={textColor} fontSize="7" fontFamily="ui-monospace, monospace" opacity="0.6">
+        TOPOLOGY / LIVE
+      </text>
+      {/* 右上角：节点和边数量 */}
+      <text x={W - 8} y={16} textAnchor="end" fill={textColor} fontSize="7" fontFamily="ui-monospace, monospace" opacity="0.6">
+        NODES: {topo.nodes.filter((n) => !n.dying).length} / EDGES: {topo.edges.length}
+      </text>
+      {/* 左下角：坐标 */}
+      <text x={8} y={H - 8} fill={textColor} fontSize="6" fontFamily="ui-monospace, monospace" opacity="0.35">
+        SP-GRID / 900×320
+      </text>
+      {/* 右下角：状态 */}
+      <text x={W - 8} y={H - 8} textAnchor="end" fill={nodeColor} fontSize="7" fontFamily="ui-monospace, monospace" opacity="0.8" fontWeight="700">
+        ● ONLINE
+      </text>
+
       {/* 边（曲线）——端点跟随节点偏移 */}
       {topo.edges.map((e, i) => {
         const from = topo.nodes.find((n) => n.id === e.from);
@@ -820,6 +838,7 @@ function CrosshairCursor({ dark }: { dark: boolean }) {
 function QuickCard({
   icon,
   label,
+  sub,
   desc,
   index,
   onClick,
@@ -827,6 +846,7 @@ function QuickCard({
 }: {
   icon: React.ReactNode;
   label: string;
+  sub: string;
   desc: string;
   index: number;
   onClick: () => void;
@@ -856,6 +876,40 @@ function QuickCard({
         ['--sp-quick-text-secondary' as string]: palette.textSecondary,
       }}
     >
+      {/* 左上角小编号 */}
+      <span
+        style={{
+          position: 'absolute',
+          top: 10,
+          left: 12,
+          fontSize: 8,
+          fontWeight: 700,
+          fontFamily: 'ui-monospace, monospace',
+          color: palette.textSecondary,
+          letterSpacing: 1,
+          opacity: 0.6,
+          zIndex: 1,
+        }}
+      >
+        A-{no}
+      </span>
+      {/* 右上角英文标签 */}
+      <span
+        style={{
+          position: 'absolute',
+          top: 10,
+          right: 12,
+          fontSize: 7,
+          fontWeight: 600,
+          fontFamily: 'ui-monospace, monospace',
+          color: palette.textSecondary,
+          letterSpacing: 1.5,
+          opacity: 0.45,
+          zIndex: 1,
+        }}
+      >
+        {sub}
+      </span>
       {/* 超大半透明编号装饰（右下角） */}
       <span
         aria-hidden
@@ -1053,12 +1107,38 @@ export default function Home() {
             key={link.label}
             icon={link.icon}
             label={link.label}
+            sub={link.sub}
             desc={link.desc}
             index={i}
             onClick={() => transitionTo(link.path)}
             palette={palette}
           />
         ))}
+      </div>
+
+      {/* 底部装饰标签（Kylin 风格） */}
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 960,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: 40,
+          paddingTop: 16,
+          borderTop: `1px solid ${dark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.08)'}`,
+          fontFamily: 'ui-monospace, monospace',
+          fontSize: 8,
+          letterSpacing: 1.5,
+          color: palette.textSecondary,
+          opacity: 0.5,
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <span>SP / BOOT</span>
+        <span>STREAM PROCESSING PLATFORM</span>
+        <span>V1.0 / 2026</span>
       </div>
     </div>
   );
