@@ -60,16 +60,16 @@ interface TopoEdge {
 
 const NODE_DEFS: Record<NodeType, { labels: string[]; tips: string[] }> = {
   source: {
-    labels: ['KAFKA', 'CSV', 'MYSQL', 'BINLOG'],
-    tips: ['Kafka 消息队列', 'CSV 文件读取', 'MySQL 全量同步', 'MySQL Binlog 订阅'],
+    labels: ['KAFKA', 'CSV', 'MYSQL', 'EXCEL'],
+    tips: ['Kafka 消息队列', 'CSV 文件读取', 'MySQL 全量同步', 'Excel 文件读取'],
   },
   transform: {
-    labels: ['FILTER', 'MAP', 'JOIN', 'AGG', 'WINDOW', 'DEDUP'],
-    tips: ['条件过滤', '字段映射', '维表关联', '聚合计算', '窗口聚合', '数据去重'],
+    labels: ['FILTER', 'MAP', 'CONCAT', 'XML2JSON', 'MASK', 'REDIS'],
+    tips: ['条件过滤', '字段映射', '字段拼接', 'XML↔JSON 转换', '数据脱敏', 'Redis 补数'],
   },
   sink: {
-    labels: ['CLICKHOUSE', 'MYSQL', 'KAFKA', 'ES', 'HDFS'],
-    tips: ['ClickHouse 写入', 'MySQL 写入', 'Kafka 下发', 'Elasticsearch 索引', 'HDFS 归档'],
+    labels: ['MYSQL', 'CSV', 'KAFKA', 'HDFS', 'JDBC'],
+    tips: ['MySQL 写入', 'CSV 导出', 'Kafka 下发', 'HDFS 归档', 'JDBC 通用写入'],
   },
 };
 
@@ -86,10 +86,10 @@ function normalRandom(mean: number, sigma: number, min: number, max: number): nu
   return Math.max(min, Math.min(max, Math.round(val)));
 }
 
-/** 节点圆半径（SVG 里 r=22，选中 26） */
-const NODE_R = 22;
+/** 节点圆半径（SVG 里 r=32，选中 38） */
+const NODE_R = 32;
 /** 两圆最小间距（边缘到边缘） */
-const NODE_GAP = 12;
+const NODE_GAP = 16;
 
 /** 检查候选位置是否与现有节点圆相交 */
 function collides(x: number, y: number, existing: TopoNode[]): boolean {
@@ -104,10 +104,11 @@ function randomNode(type: NodeType, w: number, h: number, existing: TopoNode[]):
     type === 'source' ? [0.06, 0.22] : type === 'transform' ? [0.35, 0.65] : [0.78, 0.94];
 
   // 网格化均匀分布：把区域分成格子，找空闲格子放置
+  // 格子最小间距必须 ≥ 碰撞距离（NODE_R*2 + NODE_GAP = 80px），否则相邻格子的节点会重叠
   const cols = 3, rows = 4;
   const cellW = ((xRange[1] - xRange[0]) * w) / cols;
   const cellH = (0.7 * h) / rows;
-  const minDist = Math.min(cellW, cellH) * 0.55;
+  const minDist = Math.max(Math.min(cellW, cellH) * 0.55, NODE_R * 2 + NODE_GAP);
 
   // 收集所有空闲格子
   const freeCells: { cx: number; cy: number }[] = [];
@@ -589,7 +590,7 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
         const isSelected = selected === n.id;
         const isConnected = sel ? sel.connectedNodes.has(n.id) : false;
         const isDimmed = sel ? !isConnected : false;
-        const r = isSelected ? 26 : 22;
+        const r = isSelected ? 38 : 32;
         const fill = isDimmed ? dimFill : nodeBg;
         const stroke = isDimmed ? dimmed : nodeColor;
         const offset = offsets.get(n.id) ?? { dx: 0, dy: 0 };
@@ -623,7 +624,7 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
               textAnchor="middle"
               dominantBaseline="middle"
               fill={isDimmed ? dimmed : nodeColor}
-              fontSize="8"
+              fontSize="11"
               fontFamily="ui-monospace, monospace"
               fontWeight="700"
             >

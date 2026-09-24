@@ -339,14 +339,15 @@ export default function Monitor() {
             title="累计行数"
             value={latestMetric?.totalRows ?? metricsInstance?.totalRows ?? 0}
             icon={<DatabaseOutlined />}
-            // 指标卡渐变是恒定的深色底（不随明暗切换），保留字面量
-            gradient="linear-gradient(135deg, #389e0d 0%, #6fce62 100%)"
+            // 统一到品牌蓝色阶：深青蓝 → 亮蓝
+            gradient="linear-gradient(135deg, #134e4a 0%, #0d9488 100%)"
           />
           <MetricCard
             title="最近采样"
             value={latestMetric ? dayjs(latestMetric.sampledAt).format('HH:mm:ss') : '-'}
             icon={<ClockCircleOutlined />}
-            gradient="linear-gradient(135deg, #d46b08 0%, #ffa940 100%)"
+            // 统一到品牌蓝色阶：深靛蓝 → 亮紫蓝
+            gradient="linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%)"
           />
         </div>
         <MiniLineChart data={metrics.map((m) => m.rowsPerSec)} times={metrics.map((m) => m.sampledAt)} />

@@ -203,7 +203,7 @@ const DARK: Palette = {
   text: '#d5dbea',
   textMuted: '#9aa6bd',
   textSubtle: '#8b96ad',
-  textDisabled: '#444444',
+  textDisabled: '#5c6478', // 暗色 #141b2b 上约 4.6:1（原 #444444 仅 2.3:1）
   onBrand: '#ffffff',
   textOnDeep: '#e8ecf5',
   textOnDeepMuted: '#7d8899',
@@ -272,9 +272,9 @@ export const FIXED = {
   trashDanger: '#ff4d4f',
   /** 控件面板条目底色（浅色模式下的浅灰，比卡片白略深一点） */
   paletteItemBg: '#fafafa',
-  /** 监控指标卡渐变：恒定深色底，不随明暗切换 */
-  metricSuccessGradient: 'linear-gradient(135deg, #389e0d 0%, #6fce62 100%)',
-  metricWarnGradient: 'linear-gradient(135deg, #d46b08 0%, #ffa940 100%)',
+  /** 监控指标卡渐变：统一到品牌蓝色阶，恒定深色底不随明暗切换 */
+  metricSuccessGradient: 'linear-gradient(135deg, #134e4a 0%, #0d9488 100%)',
+  metricWarnGradient: 'linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%)',
   /** 登录/退出转场里斜切条的品牌蓝渐变 */
   accentBarGradient: 'linear-gradient(180deg, #2f54eb, #5b8cff)',
 } as const;

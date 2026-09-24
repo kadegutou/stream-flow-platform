@@ -51,7 +51,7 @@ const DARK: HomePalette = {
   cardHoverShadow: '0 4px 20px rgba(46,232,160,.15)',
   graph: {
     node: '#2ee8a0',
-    nodeFill: '#0a1e14',
+    nodeFill: '#0d2818',
     dimFill: '#111822',
     dimmed: 'rgba(46,232,160,.05)',
     line: 'rgba(46,232,160,.28)',

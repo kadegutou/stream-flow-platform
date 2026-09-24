@@ -184,6 +184,10 @@ export default function App() {
             rowHoverBg: p.rowHover,
           },
           Card: { paddingLG: 20 },
+          // 表单标签色：暗色下 antd 默认派生太暗，绑到调色板的 textMuted
+          Form: {
+            labelColor: p.textMuted,
+          },
           // 侧边栏背景由 AppLayout 以渐变自定义，Menu 透明以透出底色
           Menu: {
             darkItemBg: 'transparent',
