@@ -56,6 +56,7 @@ mvn -DskipTests package
 **方式一：一键脚本（推荐）**
 
 ```bash
+cd stream-platform                  # 脚本在项目内，先进入该目录
 bash scripts/platform.sh start     # 启动控制面 + Worker + 前端
 bash scripts/platform.sh status    # 查看状态（进程 / 端口 / 健康检查）
 bash scripts/platform.sh stop      # 停止全部
