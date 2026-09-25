@@ -3,6 +3,9 @@ import { useRouteTransition } from '../components/RouteTransition';
 import { useThemeStore } from '../store/theme';
 import { prefersReducedMotion, usePrefersReducedMotion } from '../utils/motion';
 import { homePalette, type HomePalette } from '../theme/home';
+import { SPACING, FONT_SIZE, RADIUS } from '../theme/tokens';
+import { listJobs } from '../api/jobs';
+import { listWorkers, listJobInstances } from '../api/instances';
 import {
   UnorderedListOutlined,
   AppstoreOutlined,
@@ -829,6 +832,115 @@ function CrosshairCursor({ dark }: { dark: boolean }) {
   );
 }
 
+/* ========== 首页真实数据指标 ========== */
+
+interface HomeStats {
+  workers: number;
+  jobs: number;
+  running: number;
+  totalRows: number;
+}
+
+/** 格式化大数字：>=10000 显示 x.xw，>=1000 显示 x.xk */
+function fmtNum(n: number): string {
+  if (n >= 10000) return (n / 10000).toFixed(1) + 'w';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return String(n);
+}
+
+function StatItem({ label, value, sub, palette }: { label: string; value: string; sub: string; palette: HomePalette }) {
+  return (
+    <div style={{ textAlign: 'center', minWidth: 100 }}>
+      <div
+        style={{
+          fontSize: FONT_SIZE.xs - 1,
+          fontWeight: 600,
+          fontFamily: 'ui-monospace, monospace',
+          letterSpacing: 1.5,
+          color: palette.textSecondary,
+          opacity: 0.7,
+          marginBottom: SPACING.xs,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: FONT_SIZE.xxl - 2,
+          fontWeight: 800,
+          fontFamily: 'ui-monospace, monospace',
+          color: palette.accent,
+          lineHeight: 1.2,
+          marginBottom: SPACING.xs - 2,
+        }}
+      >
+        {value}
+      </div>
+      <div
+        style={{
+          fontSize: FONT_SIZE.xs - 2,
+          fontFamily: 'ui-monospace, monospace',
+          letterSpacing: 1,
+          color: palette.textSecondary,
+          opacity: 0.5,
+        }}
+      >
+        {sub}
+      </div>
+    </div>
+  );
+}
+
+function StatsBar({ palette }: { palette: HomePalette }) {
+  const [stats, setStats] = useState<HomeStats | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const [workers, jobs] = await Promise.all([listWorkers(), listJobs()]);
+        if (!alive) return;
+        const running = jobs.filter((j) => j.runningStatus === 'RUNNING').length;
+        // 累计行数：取每个作业最新实例的 totalRows 求和（首页只展示量级）
+        let totalRows = 0;
+        for (const j of jobs) {
+          try {
+            const insts = await listJobInstances(j.id);
+            if (!alive) return;
+            if (insts.length > 0) totalRows += insts[0].totalRows || 0;
+          } catch { /* 单个作业失败不影响整体 */ }
+        }
+        setStats({ workers: workers.length, jobs: jobs.length, running, totalRows });
+      } catch {
+        // 静默失败，首页指标不阻塞
+      }
+    };
+    load();
+    const timer = setInterval(load, 30000);
+    return () => { alive = false; clearInterval(timer); };
+  }, []);
+
+  if (!stats) return null;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        gap: SPACING.xxl,
+        marginBottom: SPACING.xl - 4,
+        position: 'relative',
+        zIndex: 1,
+      }}
+    >
+      <StatItem label="WORKERS" value={String(stats.workers)} sub="在线节点" palette={palette} />
+      <StatItem label="JOBS" value={String(stats.jobs)} sub="作业总数" palette={palette} />
+      <StatItem label="RUNNING" value={String(stats.running)} sub="运行中实例" palette={palette} />
+      <StatItem label="ROWS" value={fmtNum(stats.totalRows)} sub="累计处理" palette={palette} />
+    </div>
+  );
+}
+
 /* ========== 首页组件 ========== */
 
 /**
@@ -862,8 +974,8 @@ function QuickCard({
       style={{
         background: palette.cardBg,
         border: `1px solid ${palette.cardBorder}`,
-        borderRadius: 10,
-        padding: '20px 16px',
+        borderRadius: RADIUS.lg,
+        padding: `${SPACING.xl - 4}px ${SPACING.md}px`,
         cursor: 'pointer',
         textAlign: 'center',
         font: 'inherit',
@@ -900,7 +1012,7 @@ function QuickCard({
           position: 'absolute',
           top: 10,
           right: 12,
-          fontSize: 7,
+          fontSize: FONT_SIZE.xs - 3,
           fontWeight: 600,
           fontFamily: 'ui-monospace, monospace',
           color: palette.textSecondary,
@@ -931,9 +1043,9 @@ function QuickCard({
       >
         {no}
       </span>
-      <div style={{ fontSize: 24, color: palette.accent, marginBottom: 8, position: 'relative', zIndex: 1 }}>{icon}</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: palette.textPrimary, marginBottom: 4, position: 'relative', zIndex: 1 }}>{label}</div>
-      <div style={{ fontSize: 12, color: palette.textSecondary, position: 'relative', zIndex: 1 }}>{desc}</div>
+      <div style={{ fontSize: FONT_SIZE.xxl, color: palette.accent, marginBottom: SPACING.sm, position: 'relative', zIndex: 1 }}>{icon}</div>
+      <div style={{ fontSize: FONT_SIZE.md, fontWeight: 700, color: palette.textPrimary, marginBottom: SPACING.xs, position: 'relative', zIndex: 1 }}>{label}</div>
+      <div style={{ fontSize: FONT_SIZE.sm, color: palette.textSecondary, position: 'relative', zIndex: 1 }}>{desc}</div>
     </button>
   );
 }
@@ -1046,6 +1158,9 @@ export default function Home() {
       >
         STREAM PROCESSING PLATFORM
       </p>
+
+      {/* 真实数据指标 */}
+      <StatsBar palette={palette} />
 
       {/* 动态拓扑图 */}
       <div style={{ width: '100%', maxWidth: 960, marginBottom: 24, position: 'relative', zIndex: 1 }}>
