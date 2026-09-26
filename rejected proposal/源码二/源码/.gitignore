@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.log
+*.db
+
+# 测试数据（体积大，可脚本再生成）
+backend/data/
+
+# C++ Build
+backend/cpp/build/
+backend/cpp/pybind11/
+*.pyd
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documents
+docs/*.mp4

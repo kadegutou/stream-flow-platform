@@ -1,0 +1,37 @@
+# 废案（被否决的 Python + C++ 技术路线）
+# 说明：本项目已并入主仓库 rejected proposal/ 目录，此文件只管本目录下的忽略规则。
+# 规则不带 backend/ 前缀 —— 源码在 源码二/源码/backend/ 下，带前缀会失效。
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.log
+
+# 本地数据与数据库（体积大 / 运行时生成，可用 backend/scripts/gen_data.py 重新生成）
+data/
+*.db
+
+# C++ 构建产物（C++ 源码在 backend/cpp/src，CMake 可重新编译）
+build/
+pybind11/
+*.pyd
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documents
+docs/*.mp4
