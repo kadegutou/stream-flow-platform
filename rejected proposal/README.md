@@ -3,17 +3,20 @@
 > ⚠️ **本目录是赛题中被否决的技术路线**，与最终采用的「Java 21 虚拟线程 + Spring Boot」方案互为备选。
 > 按老师要求提交，作为**方案选型的对照材料**。本方案已通过可运行验证（见下方交付物 4）。
 
-## 📦 交付物清单
+## 📦 交付物清单（`deliverables/`）
 
-| # | 文件 | 说明 |
+| # | 交付物 | 说明 |
 |---|---|---|
-| 1 | [`技术方案.md`](技术方案.md) | 技术路线、选型依据（含与各备选栈的对比）、架构设计 |
-| 2 | [`源码/docs/概要设计说明书.docx`](源码/docs/概要设计说明书.docx) | 概要设计说明书 |
-| 3 | [`源码/docs/数据库设计.md`](源码/docs/数据库设计.md) | 数据库设计（4 张表 + 设计说明） |
-| 4 | [`源码/docs/冒烟测试报告.md`](源码/docs/冒烟测试报告.md) | 冒烟测试 25 用例全过 + 端到端验证 + 缺陷修复记录 |
-| 5 | [`源码/`](源码/) | 完整源码：backend（FastAPI + C++ pybind11）、frontend（React 18 + React Flow） |
-| 6 | [`项目源码包.tar.gz`](项目源码包.tar.gz) | 上述源码打包（已排除 node_modules / 缓存 / 本地数据库） |
+| 1 | [`deliverables/技术方案.docx`](deliverables/技术方案.docx) | 技术路线、选型依据（含与各备选栈对比）、架构设计 |
+| 2 | [`deliverables/概要设计说明书.docx`](deliverables/概要设计说明书.docx) | 概要设计说明书 |
+| 3 | [`deliverables/数据库设计说明书.docx`](deliverables/数据库设计说明书.docx) | 4 张表结构 + ER 关系 + 设计说明 |
+| 4 | [`deliverables/冒烟测试报告.docx`](deliverables/冒烟测试报告.docx) | 冒烟测试 25 用例全过 + 端到端复验 + 缺陷修复记录 |
+| 5 | [`deliverables/项目源码包.tar.gz`](deliverables/项目源码包.tar.gz) | 完整源码包（69 文件，已排除 node_modules / 缓存 / 本地数据库） |
+| 6 | [`源码/`](源码/) | 源码目录（backend + frontend + Markdown 源文档） |
 | 7 | 本文件 | 项目说明与部署运行方式（Quick Start 见下） |
+
+> 第 1/3/4 项由 `scripts/md2docx.py` 从 `源码/` 下的 Markdown 源文档生成，
+> 修改源文档后运行 `python scripts/md2docx.py --all` 即可重新导出。
 
 **可运行性验证结论**：后端 12 个内置控件注册正常；端到端作业
 `CSV 输入 → 字段拼接 → CSV 输出` 执行成功（3 节点全绿、输出内容与预期一致）；
