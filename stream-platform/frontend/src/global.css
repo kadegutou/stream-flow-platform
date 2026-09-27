@@ -482,6 +482,37 @@ html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-log-line:last-child {
   background: var(--sp-stripe-row) !important;
 }
 
+/* 表格数字列：等宽字体增强「数据感」 */
+.sp-table-num {
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* 表格行 hover：左侧品牌蓝竖条 + 背景色 */
+.sp-content .ant-table-tbody > tr > td {
+  transition: background 0.2s ease;
+}
+.sp-content .ant-table-tbody > tr:hover > td:first-child {
+  box-shadow: inset 2px 0 0 var(--sp-accent);
+}
+
+/* 表格行点击态：短暂高亮 */
+.sp-content .ant-table-tbody > tr:active > td {
+  background: rgba(var(--sp-accent-rgb), 0.08) !important;
+}
+
+/* 表格分页器微调 */
+.sp-content .ant-pagination .ant-pagination-item {
+  border-radius: 6px;
+}
+.sp-content .ant-pagination .ant-pagination-item-active {
+  border-color: var(--sp-accent);
+}
+.sp-content .ant-pagination .ant-pagination-options {
+  margin-left: 16px;
+}
+
 /* 暗色模式下的斑马纹与全局底色 */
 html[data-sp-dark='true'] body {
   background: var(--sp-page);
@@ -521,27 +552,56 @@ html[data-sp-dark='true'] ::-webkit-scrollbar-thumb:hover {
 
 /* ---------- 内容区层次 ---------- */
 
-/* 内容区：顶部极淡光晕，避免大片纯灰显得平 */
+/*
+ * 内容区：顶部极淡光晕 + 极浅网格点阵，避免大片纯灰显得平。
+ * 点阵与编辑器画布呼应，营造统一的技术氛围。
+ */
 .sp-content {
-  background-image: radial-gradient(
-    ellipse 70% 40% at 50% -8%,
-    rgba(var(--sp-brand-seed-rgb), 0.055),
-    transparent 70%
-  );
+  background-image:
+    radial-gradient(
+      ellipse 70% 40% at 50% -8%,
+      rgba(var(--sp-brand-seed-rgb), 0.055),
+      transparent 70%
+    ),
+    radial-gradient(circle, var(--sp-canvas-dot) 0.5px, transparent 0.5px);
+  background-size: 100% 100%, 24px 24px;
 }
 
-/* 卡片：柔和分层投影，替代 antd 默认的硬边框 */
+/*
+ * 卡片：微边框 + 柔和分层投影，替代 antd 默认的硬边框。
+ * 边框提供基础分层，阴影提供浮起感，两者叠加让卡片在浅色模式下也清晰可见。
+ */
 .sp-content .ant-card {
-  border-color: transparent;
-  box-shadow: 0 1px 2px rgba(20, 30, 48, 0.04), 0 4px 16px rgba(20, 30, 48, 0.06);
+  border: 1px solid var(--sp-border);
+  box-shadow: var(--sp-shadow-card);
+  /* 顶部渐变光带：hover 时从左到右淡出的品牌蓝发丝线 */
+  position: relative;
+  overflow: hidden;
+}
+.sp-content .ant-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--sp-accent), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+.sp-content .ant-card:hover::before {
+  opacity: 1;
 }
 html[data-sp-dark='true'] .sp-content .ant-card {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.24), 0 4px 16px rgba(0, 0, 0, 0.28);
+  border-color: var(--sp-border);
+  box-shadow: var(--sp-shadow-card);
 }
 
 /* 卡片悬停微抬升（仅表格外的信息卡，避免表格行悬停时抖动） */
 .sp-content .ant-card:hover {
-  box-shadow: 0 2px 4px rgba(20, 30, 48, 0.06), 0 8px 24px rgba(20, 30, 48, 0.09);
+  box-shadow: var(--sp-shadow-hover);
   transition: box-shadow 0.25s ease;
 }
 
@@ -566,13 +626,13 @@ html[data-sp-dark='true'] .sp-content .ant-card {
 
 @keyframes sp-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(82, 196, 26, 0.55);
+    box-shadow: 0 0 0 0 rgba(82, 196, 26, 0.55), 0 0 6px rgba(82, 196, 26, 0.4);
   }
   70% {
-    box-shadow: 0 0 0 6px rgba(82, 196, 26, 0);
+    box-shadow: 0 0 0 8px rgba(82, 196, 26, 0), 0 0 12px rgba(82, 196, 26, 0.15);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(82, 196, 26, 0);
+    box-shadow: 0 0 0 0 rgba(82, 196, 26, 0), 0 0 6px rgba(82, 196, 26, 0.4);
   }
 }
 
@@ -685,6 +745,49 @@ html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-shutters i:nth-child(5) {
   to   { transform: translateY(0); }
 }
 
+/* ---------- 微交互细节 ---------- */
+
+/* 按钮 active 态微缩放反馈 */
+.sp-content .ant-btn:active:not(:disabled) {
+  transform: scale(0.97);
+  transition: transform 0.1s ease;
+}
+
+/* 输入框 focus 品牌蓝光晕 */
+.sp-content .ant-input:focus,
+.sp-content .ant-input-focused,
+.sp-content .ant-input-affix-wrapper:focus,
+.sp-content .ant-input-affix-wrapper-focused,
+.sp-content .ant-input-number:focus,
+.sp-content .ant-input-number-focused,
+.sp-content .ant-select-focused .ant-select-selector,
+.sp-content .ant-picker-focused {
+  box-shadow: 0 0 0 3px rgba(var(--sp-accent-rgb), 0.12) !important;
+}
+
+/* Switch 滑动动画增强 */
+.sp-content .ant-switch {
+  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sp-content .ant-switch .ant-switch-handle {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Tooltip 渐入动画 */
+.ant-tooltip {
+  animation: spTooltipIn 0.15s ease-out;
+}
+@keyframes spTooltipIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* 尊重系统的「减少动态效果」设置 */
 @media (prefers-reduced-motion: reduce) {
   .sp-page-enter,
@@ -693,7 +796,8 @@ html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-shutters i:nth-child(5) {
   .sp-quick-card,
   /* 路由转场与登录/退场动画：JS 侧也会跳过转场，这里保证不漏网 */
   .sp-route-transition,
-  .sp-route-transition * {
+  .sp-route-transition *,
+  .ant-tooltip {
     animation: none;
     transition: none;
   }

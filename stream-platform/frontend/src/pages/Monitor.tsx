@@ -13,7 +13,7 @@ import { AnimatedNumber } from '../components/AnimatedNumber';
 import { useThemeStore } from '../store/theme';
 import { palette } from '../theme/palette';
 
-/** 渐变指标卡（监控大盘风格） */
+/** 渐变指标卡（监控大盘风格）：底部渐发光带呼应语义色 */
 function MetricCard({
   title,
   value,
@@ -37,6 +37,8 @@ function MetricCard({
         background: gradient,
         color: '#fff', // 渐变卡恒为深色底，白字固定
         boxShadow: '0 4px 14px rgba(31,45,61,.14)',
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -55,6 +57,19 @@ function MetricCard({
         {typeof value === 'number' ? <AnimatedNumber value={value} /> : value}
         {suffix && <span style={{ fontSize: 13, fontWeight: 400, marginLeft: 6, opacity: 0.85 }}>{suffix}</span>}
       </div>
+      {/* 底部渐发光带：从中心向两侧淡出 */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: '10%',
+          right: '10%',
+          height: 2,
+          borderRadius: 2,
+          background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent)',
+        }}
+      />
     </div>
   );
 }
@@ -282,9 +297,9 @@ export default function Monitor() {
         locale={{ emptyText: <EmptyState description="暂无运行实例，到「作业管理」上线一个作业试试" /> }}
         rowClassName={(_, i) => (i % 2 === 1 ? 'sp-table-row-striped' : '')}
         columns={[
-          { title: '实例ID', dataIndex: 'id', width: 90 },
+          { title: '实例ID', dataIndex: 'id', width: 90, className: 'sp-table-num' },
           { title: '作业名', dataIndex: 'jobName' },
-          { title: '作业版本', dataIndex: 'jobVersion', width: 90, render: (v: number) => `v${v}` },
+          { title: '作业版本', dataIndex: 'jobVersion', width: 90, className: 'sp-table-num', render: (v: number) => `v${v}` },
           {
             title: '状态',
             dataIndex: 'status',
@@ -295,6 +310,7 @@ export default function Monitor() {
             title: '累计处理行数',
             dataIndex: 'totalRows',
             width: 130,
+            className: 'sp-table-num',
             render: (v: number) => v?.toLocaleString(),
           },
           {

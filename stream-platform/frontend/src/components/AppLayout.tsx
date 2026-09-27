@@ -1,4 +1,4 @@
-import { Layout, Dropdown, Avatar, Space, Breadcrumb, Spin } from 'antd';
+import { Layout, Dropdown, Avatar, Space, Breadcrumb, Skeleton } from 'antd';
 import {
   AppstoreOutlined,
   UnorderedListOutlined,
@@ -282,7 +282,9 @@ export default function AppLayout() {
       <Layout>
         <Header
           style={{
-            background: p.surface,
+            background: dark ? `rgba(20,27,43,.82)` : `rgba(255,255,255,.82)`,
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
             padding: `0 ${SPACING.lg}px`,
             display: 'flex',
             justifyContent: 'space-between',
@@ -291,8 +293,9 @@ export default function AppLayout() {
             // 底部发丝线改为品牌蓝渐变（左→右：透明→品牌蓝→透明），替代原灰色 borderBottom
             borderBottom: 'none',
             position: 'relative',
-            height: 48,
-            lineHeight: '48px',
+            height: 56,
+            lineHeight: '56px',
+            zIndex: 20,
           }}
         >
           {/* 品牌蓝发丝渐变线：贴 Header 底部，1px，左→右 透明→品牌蓝→透明 */}
@@ -309,7 +312,7 @@ export default function AppLayout() {
               pointerEvents: 'none',
             }}
           />
-          {/* 左侧：终端风格路径标签 */}
+          {/* 左侧：终端风格路径标签 + 芯片式面包屑 */}
           <div
             style={{
               fontFamily: 'ui-monospace, monospace',
@@ -321,7 +324,18 @@ export default function AppLayout() {
               gap: 8,
             }}
           >
-            <span style={{ color: p.accent, fontWeight: 700 }}>SP</span>
+            <span
+              style={{
+                color: p.accent,
+                fontWeight: 700,
+                background: `rgba(${p.accentRgb},.1)`,
+                padding: '2px 8px',
+                borderRadius: 4,
+                fontSize: 11,
+              }}
+            >
+              SP
+            </span>
             <span style={{ opacity: 0.4 }}>/</span>
             <Breadcrumb
               items={breadcrumbItems}
@@ -329,7 +343,7 @@ export default function AppLayout() {
                 fontSize: 11,
                 fontFamily: 'ui-monospace, monospace',
                 letterSpacing: 1,
-                lineHeight: '48px',
+                lineHeight: '56px',
               }}
             />
           </div>
@@ -379,8 +393,14 @@ export default function AppLayout() {
             >
               {dark ? <SunOutlined /> : <MoonOutlined />}
             </IconActionButton>
-            {/* 分隔线 */}
-            <span style={{ width: 1, height: 20, background: p.borderHairline }} />
+            {/* 分隔光带：渐变竖线 */}
+            <span
+              style={{
+                width: 1,
+                height: 20,
+                background: `linear-gradient(180deg, transparent, ${p.borderStrong}, transparent)`,
+              }}
+            />
             {/* 用户区：等宽字体紧凑布局 */}
             <Dropdown
               menu={{
@@ -425,8 +445,8 @@ export default function AppLayout() {
           <div key={location.pathname} className="sp-page-enter">
             <Suspense
               fallback={
-                <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
-                  <Spin size="large" />
+                <div style={{ padding: '24px 0' }}>
+                  <Skeleton active paragraph={{ rows: 6 }} title={{ width: 200 }} />
                 </div>
               }
             >

@@ -97,6 +97,11 @@ export interface Palette {
   /** 键盘焦点环 */
   focusRing: string;
 
+  /** 卡片阴影（常态） */
+  shadowCard: string;
+  /** 卡片阴影（悬停） */
+  shadowHover: string;
+
   /**
    * RGB 三元组：给需要自定透明度的场合拼 `rgba(...)` 用，
    * 这样"色相"只有一处定义，透明度仍可按场景取。
@@ -174,6 +179,9 @@ const LIGHT: Palette = {
 
   focusRing: '#2f54eb',
 
+  shadowCard: '0 1px 2px rgba(20,30,48,.04), 0 4px 16px rgba(20,30,48,.06)',
+  shadowHover: '0 2px 4px rgba(20,30,48,.06), 0 8px 24px rgba(20,30,48,.09)',
+
   accentRgb: '47,84,235',
   accentLightRgb: '122,165,255',
   brandSeedRgb: '47,84,235',
@@ -243,6 +251,9 @@ const DARK: Palette = {
   minimapMask: 'rgba(15,20,32,.72)',
 
   focusRing: '#5b8cff',
+
+  shadowCard: '0 1px 2px rgba(0,0,0,.24), 0 4px 16px rgba(0,0,0,.28)',
+  shadowHover: '0 2px 4px rgba(0,0,0,.28), 0 8px 24px rgba(0,0,0,.32)',
 
   accentRgb: '91,140,255',
   accentLightRgb: '122,165,255',
@@ -328,6 +339,8 @@ const CSS_VAR_KEYS: Array<[keyof Palette, string]> = [
   ['canvasDot', '--sp-canvas-dot'],
   ['minimapMask', '--sp-minimap-mask'],
   ['focusRing', '--sp-focus-ring'],
+  ['shadowCard', '--sp-shadow-card'],
+  ['shadowHover', '--sp-shadow-hover'],
   ['accentRgb', '--sp-accent-rgb'],
   ['accentLightRgb', '--sp-accent-light-rgb'],
   ['brandSeedRgb', '--sp-brand-seed-rgb'],

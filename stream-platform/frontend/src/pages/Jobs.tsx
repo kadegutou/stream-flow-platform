@@ -202,11 +202,11 @@ export default function Jobs() {
         }}
         rowClassName={(_, i) => (i % 2 === 1 ? 'sp-table-row-striped' : '')}
         columns={[
-          { title: 'ID', dataIndex: 'id', width: 70 },
+          { title: 'ID', dataIndex: 'id', width: 70, className: 'sp-table-num' },
           { title: '名称', dataIndex: 'name' },
           { title: '描述', dataIndex: 'description', ellipsis: true },
-          { title: '版本', dataIndex: 'version', width: 80, render: (v: number) => `v${v}` },
-          { title: '并行度', dataIndex: 'parallelism', width: 80 },
+          { title: '版本', dataIndex: 'version', width: 80, className: 'sp-table-num', render: (v: number) => `v${v}` },
+          { title: '并行度', dataIndex: 'parallelism', width: 80, className: 'sp-table-num' },
           {
             title: '更新时间',
             dataIndex: 'updatedAt',
