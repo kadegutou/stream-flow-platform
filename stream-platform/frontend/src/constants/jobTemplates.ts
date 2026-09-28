@@ -135,4 +135,68 @@ export const JOB_TEMPLATES: JobTemplate[] = [
       ],
     },
   },
+  {
+    key: 'parallel-scale',
+    name: '示例：并行度 4 横向扩展',
+    description:
+      '1000 万行 CSV，并行度 4。配合 `docker compose up -d --scale worker=3` 演示多 Worker 分摊；'
+      + '输出为 4 个分片文件（.part0~part3）。注意：100 万行档并行收益被调度开销抵消，对比请用 1000 万行。',
+    parallelism: 4,
+    flow: 'CSV 输入(1000万) → 字段拼接 → CSV 输出（4 分片并行）',
+    dag: {
+      nodes: [
+        {
+          id: 'n1',
+          componentCode: 'csv-source',
+          params: { path: '/data/bench/in-1000w.csv', hasHeader: true, batchSize: 5000 },
+        },
+        {
+          id: 'n2',
+          componentCode: 'field-concat',
+          params: { sourceFields: ['c1', 'c2', 'c3'], targetField: 'concat_col', separator: '-' },
+        },
+        {
+          id: 'n3',
+          componentCode: 'csv-sink',
+          params: { path: '/data/bench/demo-p4-out.csv' },
+        },
+      ],
+      edges: [
+        { from: 'n1', to: 'n2' },
+        { from: 'n2', to: 'n3' },
+      ],
+    },
+  },
+  {
+    key: 'bench-50m',
+    name: '示例：5000 万行性能基准',
+    description:
+      '5000 万行 CSV（5.6GB），并行度 6。性能测试主场景，需 3 个 Worker 才能跑满；'
+      + '输出为 6 个分片文件，行数校验应等于 5000 万 + 6 行表头。',
+    parallelism: 6,
+    flow: 'CSV 输入(5000万) → 字段拼接 → CSV 输出（6 分片并行）',
+    dag: {
+      nodes: [
+        {
+          id: 'n1',
+          componentCode: 'csv-source',
+          params: { path: '/data/bench/in-5000w.csv', hasHeader: true, batchSize: 5000 },
+        },
+        {
+          id: 'n2',
+          componentCode: 'field-concat',
+          params: { sourceFields: ['c1', 'c2', 'c3'], targetField: 'concat_col', separator: '-' },
+        },
+        {
+          id: 'n3',
+          componentCode: 'csv-sink',
+          params: { path: '/data/bench/bench-out-50m.csv' },
+        },
+      ],
+      edges: [
+        { from: 'n1', to: 'n2' },
+        { from: 'n2', to: 'n3' },
+      ],
+    },
+  },
 ];
