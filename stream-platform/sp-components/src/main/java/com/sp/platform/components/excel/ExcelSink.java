@@ -5,6 +5,7 @@ import com.sp.platform.common.Row;
 import com.sp.platform.common.spi.ComponentDef;
 import com.sp.platform.common.spi.Sink;
 import com.sp.platform.components.Params;
+import com.sp.platform.components.shard.ShardUtils;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.xssf.streaming.SXSSFRow;
 import org.apache.poi.xssf.streaming.SXSSFSheet;
@@ -15,12 +16,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** Excel 输出控件（.xlsx）：POI SXSSF 流式写，内存窗口 100 行。 */
+/**
+ * Excel 输出控件（.xlsx）：POI SXSSF 流式写，内存窗口 100 行。
+ *
+ * <p>分片输出（设计文档 §7）：totalShards &gt; 1 时每个分片写独立分文件，避免并发写同一
+ * 文件互相踩踏（out.xlsx → out.part0.xlsx / out.part1.xlsx ...），规则与 csv-sink 一致。
+ * shardIndex/totalShards 由执行引擎注入。
+ */
 @ComponentDef(
         code = "excel-sink",
         name = "Excel 输出",
         category = "SINK",
-        description = "以 SXSSF 流式方式写出 xlsx 文件",
+        description = "以 SXSSF 流式方式写出 xlsx 文件；并行度>1 时写 .partN 分文件",
         icon = "file-excel",
         paramSchema = """
                 {
@@ -44,6 +51,13 @@ public class ExcelSink implements Sink {
     public void open(Map<String, Object> params, Context ctx) {
         this.path = Params.required(params, "path");
         String sheetName = Params.str(params, "sheetName", "Sheet1");
+        int shardIndex = Params.integer(params, "shardIndex", 0);
+        int totalShards = Params.integer(params, "totalShards", 1);
+        if (totalShards > 1) {
+            // 分片输出：每个分片写独立分文件（out.xlsx → out.partN.xlsx），
+            // 避免多个分片并发写同一文件互相覆盖/损坏；下游按 *.part* 汇总，不做合并
+            this.path = ShardUtils.shardPath(path, shardIndex);
+        }
         this.workbook = new SXSSFWorkbook(null, 100, false, true);
         this.sheet = workbook.createSheet(sheetName);
     }

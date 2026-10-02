@@ -40,17 +40,19 @@ public class JobController {
 
     /**
      * 不支持并行分片的数据源：不读取 shardIndex/totalShards，并行度>1 时每个分片
-     * 执行同一条 SQL / 读同一文件 → 输出 N 倍重复数据。
-     * （对比 csv-source / hdfs-source 有字节切片分片）
+     * 执行同一条 SQL → 输出 N 倍重复数据。
+     * （对比 csv-source / hdfs-source 按字节切片、excel-source 按行区间切分）
      */
     private static final Set<String> NON_SHARDABLE_SOURCES = Set.of(
-            "mysql-source", "postgresql-source", "oracle-source", "excel-source");
+            "mysql-source", "postgresql-source", "oracle-source");
 
     /**
      * 不支持并行分片的输出：不写 .partN 分文件，并行度>1 时多个分片并发写同一路径
-     * → 数据互相覆盖/文件损坏。（对比 csv-sink / hdfs-sink 有 shardPath 分片）
+     * → 数据互相覆盖/文件损坏。
+     * 目前 csv-sink / hdfs-sink / excel-sink 均已支持分片输出，故本集合为空；
+     * 保留该机制以便后续新增汇控件时按需登记。
      */
-    private static final Set<String> NON_SHARDABLE_SINKS = Set.of("excel-sink");
+    private static final Set<String> NON_SHARDABLE_SINKS = Set.of();
 
     private final JobRepo jobRepo;
     private final JobInstanceRepo instanceRepo;
@@ -91,7 +93,7 @@ public class JobController {
 
     /**
      * 分片兼容性校验：并行度>1 时，DAG 中若含不支持并行分片的源/汇控件则拒绝。
-     * 防止 N 倍重复数据（JDBC/Excel 源）与并发写文件损坏（excel-sink）。
+     * 防止 N 倍重复数据（JDBC 源）与并发写文件损坏（未登记分片输出的汇）。
      * 空 DAG（未编排的占位图）直接放行，交 DAG 校验负责。
      */
     private static void validateShardCompatibility(Dag dag, int parallelism) {
@@ -102,11 +104,13 @@ public class JobController {
             String code = n.componentCode();
             if (NON_SHARDABLE_SOURCES.contains(code)) {
                 throw ApiException.badRequest("控件 " + code + " 不支持并行分片：并行度>1 时每个分片会读取全量数据"
-                        + "造成 N 倍重复输出。请将并行度设为 1，或改用支持分片的源（csv-source / hdfs-source）");
+                        + "造成 N 倍重复输出。请将并行度设为 1，或改用支持分片的源"
+                        + "（csv-source / hdfs-source / excel-source）");
             }
             if (NON_SHARDABLE_SINKS.contains(code)) {
                 throw ApiException.badRequest("控件 " + code + " 不支持并行分片：并行度>1 时多个分片会并发写同一文件"
-                        + "导致数据互相覆盖/文件损坏。请将并行度设为 1，或改用支持分片输出的汇（csv-sink / hdfs-sink）");
+                        + "导致数据互相覆盖/文件损坏。请将并行度设为 1，或改用支持分片输出的汇"
+                        + "（csv-sink / hdfs-sink / excel-sink）");
             }
         }
     }
