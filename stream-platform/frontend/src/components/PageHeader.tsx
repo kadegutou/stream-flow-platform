@@ -49,7 +49,15 @@ export function PageHeader({
             {title}
           </Typography.Title>
           {subtitle && (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text
+              type="secondary"
+              style={{
+                fontSize: 11,
+                fontFamily: 'ui-monospace, monospace',
+                letterSpacing: 1,
+                textTransform: 'uppercase',
+              }}
+            >
               {subtitle}
             </Typography.Text>
           )}

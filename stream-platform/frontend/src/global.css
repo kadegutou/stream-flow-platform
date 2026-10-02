@@ -743,6 +743,34 @@ html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-shutters i:nth-child(5) {
   transform: translateY(-2px);
 }
 
+/* QuickCard stagger 入场动画 */
+.sp-quick-card-enter {
+  animation: spQuickCardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes spQuickCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 终端窗口光标闪烁 */
+.sp-terminal-cursor {
+  display: inline-block;
+  animation: spCursorBlink 1s step-end infinite;
+  color: var(--sp-accent);
+  font-size: 12px;
+  line-height: 1;
+}
+@keyframes spCursorBlink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
 /* 登录页 FEATURES stagger 入场动画 */
 .sp-login-feature {
   opacity: 0;
@@ -832,5 +860,11 @@ html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-shutters i:nth-child(5) {
   .ant-tooltip {
     animation: none;
     transition: none;
+  }
+  /* 入场动画类：禁用动画时保持可见 */
+  .sp-login-feature,
+  .sp-quick-card-enter {
+    opacity: 1;
+    animation: none;
   }
 }

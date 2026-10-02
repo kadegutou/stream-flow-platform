@@ -230,6 +230,7 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
   const [topo, setTopo] = useState(() => generateTopology(W, H, prefersReducedMotion() ? 1 : 0));
   const [selected, setSelected] = useState<number | null>(null);
   const [hoverEdge, setHoverEdge] = useState<number | null>(null);
+  const [hoveredNode, setHoveredNode] = useState<number | null>(null);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const { node: nodeColor, nodeFill: nodeBg, dimFill, dimmed, line: lineColor, lineHighlight, dot: dotColor, tip: textColor } =
@@ -592,11 +593,12 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
       {/* 节点：球 + 文字 + 提示作为一组刚体位移（偏移加在 <g> 上，不能只挪文字） */}
       {topo.nodes.map((n) => {
         const isSelected = selected === n.id;
+        const isHovered = hoveredNode === n.id;
         const isConnected = sel ? sel.connectedNodes.has(n.id) : false;
         const isDimmed = sel ? !isConnected : false;
-        const r = isSelected ? 38 : 32;
+        const r = isSelected ? 38 : isHovered ? 35 : 32;
         const fill = isDimmed ? dimFill : nodeBg;
-        const stroke = isDimmed ? dimmed : nodeColor;
+        const stroke = isDimmed ? dimmed : isHovered ? lineHighlight : nodeColor;
         const offset = offsets.get(n.id) ?? { dx: 0, dy: 0 };
 
         return (
@@ -608,6 +610,8 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
               ev.stopPropagation();
               setSelected((prev) => (prev === n.id ? null : n.id));
             }}
+            onMouseEnter={() => setHoveredNode(n.id)}
+            onMouseLeave={() => setHoveredNode((prev) => (prev === n.id ? null : prev))}
             style={{ cursor: 'pointer' }}
           >
             {/* 只过渡颜色/线宽：原先写 transition: all，SVG 几何属性 cx/cy 也会被过渡，
@@ -618,9 +622,9 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
               r={r}
               fill={fill}
               stroke={stroke}
-              strokeWidth={isSelected ? 2.5 : 1.5}
-              filter={isSelected ? 'url(#sp-glow)' : undefined}
-              style={{ transition: 'fill 0.25s, stroke 0.25s, stroke-width 0.25s' }}
+              strokeWidth={isSelected ? 2.5 : isHovered ? 2 : 1.5}
+              filter={isSelected ? 'url(#sp-glow)' : isHovered ? 'url(#sp-glow)' : undefined}
+              style={{ transition: 'fill 0.25s, stroke 0.25s, stroke-width 0.25s, r 0.2s' }}
             />
             <text
               x={n.x}
@@ -634,7 +638,7 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
             >
               {n.label}
             </text>
-            {isSelected && (
+            {(isSelected || isHovered) && (
               <text
                 x={n.x}
                 y={n.y + 40}
@@ -849,7 +853,7 @@ function fmtNum(n: number): string {
   return String(n);
 }
 
-function StatItem({ label, value, sub, palette, formatNum }: { label: string; value: number; sub: string; palette: HomePalette; formatNum?: boolean }) {
+function StatItem({ label, value, sub, palette, formatNum, live }: { label: string; value: number; sub: string; palette: HomePalette; formatNum?: boolean; live?: boolean }) {
   return (
     <div style={{ textAlign: 'center', minWidth: 100 }}>
       <div
@@ -861,8 +865,13 @@ function StatItem({ label, value, sub, palette, formatNum }: { label: string; va
           color: palette.textSecondary,
           opacity: 0.7,
           marginBottom: SPACING.xs,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 4,
         }}
       >
+        {live && <span className="sp-pulse-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: palette.accent, flexShrink: 0 }} />}
         {label}
       </div>
       <div
@@ -893,6 +902,7 @@ function StatItem({ label, value, sub, palette, formatNum }: { label: string; va
 }
 
 function StatsBar({ palette }: { palette: HomePalette }) {
+  const dark = useThemeStore((s) => s.dark);
   const [stats, setStats] = useState<HomeStats | null>(null);
 
   useEffect(() => {
@@ -992,8 +1002,11 @@ function StatsBar({ palette }: { palette: HomePalette }) {
       }}
     >
       <StatItem label="WORKERS" value={stats.workers} sub="在线节点" palette={palette} />
+      <span style={{ width: 1, height: 40, background: dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)', alignSelf: 'center' }} />
       <StatItem label="JOBS" value={stats.jobs} sub="作业总数" palette={palette} />
-      <StatItem label="RUNNING" value={stats.running} sub="运行中实例" palette={palette} />
+      <span style={{ width: 1, height: 40, background: dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)', alignSelf: 'center' }} />
+      <StatItem label="RUNNING" value={stats.running} sub="运行中实例" palette={palette} live />
+      <span style={{ width: 1, height: 40, background: dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)', alignSelf: 'center' }} />
       <StatItem label="ROWS" value={stats.totalRows} sub="累计处理" palette={palette} formatNum />
     </div>
   );
@@ -1039,6 +1052,11 @@ function QuickCard({
         font: 'inherit',
         position: 'relative',
         overflow: 'hidden',
+        height: 140,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
         ['--sp-quick-border-hover' as string]: palette.cardHoverBorder,
         ['--sp-quick-shadow-hover' as string]: palette.cardHoverShadow,
         ['--sp-quick-accent' as string]: palette.accent,
@@ -1124,7 +1142,7 @@ export default function Home() {
       setLogs((prev) => {
         const next = [...prev, LOG_POOL[logIdx.current % LOG_POOL.length]];
         logIdx.current += 1;
-        return next.slice(-6);
+        return next;
       });
     }, 1800);
     return () => clearInterval(timer);
@@ -1226,49 +1244,79 @@ export default function Home() {
       </div>
 
       {/* 滚动日志（演示样例：文案只写平台真实具备的能力） */}
+      {/* 终端窗口风格的日志区 */}
       <div
+        className="sp-terminal-window"
         style={{
           width: '100%',
           maxWidth: 640,
-          fontFamily: 'ui-monospace, monospace',
-          fontSize: 12,
-          letterSpacing: 1,
-          color: palette.textSecondary,
-          opacity: 0.8,
-          marginBottom: 6,
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
-        DEMO OUTPUT / 演示样例
-      </div>
-      <div
-        style={{
-          width: '100%',
-          maxWidth: 640,
-          minHeight: 110,
           marginBottom: 32,
-          fontFamily: 'ui-monospace, monospace',
-          fontSize: 12,
-          lineHeight: 1.8,
-          // 原来用强调色 + opacity .75，浅色下实际对比度只有约 3.2:1；改用深一档的 logText 并去掉透明度
-          color: palette.logText,
           position: 'relative',
           zIndex: 1,
+          borderRadius: 10,
+          border: `1px solid ${dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)'}`,
+          background: dark ? 'rgba(13,17,23,.85)' : 'rgba(246,248,250,.9)',
+          overflow: 'hidden',
         }}
       >
-        {logs.map((line, i) => (
-          <div key={`${i}-${line}`} style={{ animation: 'spRtLogIn 0.3s ease-out both' }}>
-            {line}
-          </div>
-        ))}
+        {/* 终端标题栏 */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '8px 12px',
+            borderBottom: `1px solid ${dark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.06)'}`,
+            background: dark ? 'rgba(255,255,255,.03)' : 'rgba(0,0,0,.03)',
+          }}
+        >
+          {/* 红绿灯圆点 */}
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff5f57', flexShrink: 0 }} />
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#febc2e', flexShrink: 0 }} />
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#28c840', flexShrink: 0 }} />
+          <span
+            style={{
+              marginLeft: 'auto',
+              fontFamily: 'ui-monospace, monospace',
+              fontSize: 10,
+              letterSpacing: 1,
+              color: palette.textSecondary,
+              opacity: 0.6,
+            }}
+          >
+            sp-engine — bash
+          </span>
+        </div>
+        {/* 日志内容 */}
+        <div
+          style={{
+            padding: '10px 12px',
+            height: 110,
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
+            fontFamily: 'ui-monospace, monospace',
+            fontSize: 12,
+            lineHeight: 1.8,
+            color: dark ? palette.logText : palette.logText,
+          }}
+        >
+          {logs.map((line, i) => (
+            <div key={`${i}-${line}`} style={{ animation: 'spRtLogIn 0.3s ease-out both' }}>
+              {line}
+            </div>
+          ))}
+          {/* 闪烁光标 */}
+          <span className="sp-terminal-cursor" style={{ color: palette.accent }}>▊</span>
+        </div>
       </div>
 
       {/* 快捷入口 */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 16,
           width: '100%',
           maxWidth: 800,
@@ -1277,16 +1325,21 @@ export default function Home() {
         }}
       >
         {QUICK_LINKS.map((link, i) => (
-          <QuickCard
+          <div
             key={link.label}
-            icon={link.icon}
-            label={link.label}
-            sub={link.sub}
-            desc={link.desc}
-            index={i}
-            onClick={() => transitionTo(link.path)}
-            palette={palette}
-          />
+            className="sp-quick-card-enter"
+            style={{ animationDelay: `${0.5 + i * 0.1}s` }}
+          >
+            <QuickCard
+              icon={link.icon}
+              label={link.label}
+              sub={link.sub}
+              desc={link.desc}
+              index={i}
+              onClick={() => transitionTo(link.path)}
+              palette={palette}
+            />
+          </div>
         ))}
       </div>
 

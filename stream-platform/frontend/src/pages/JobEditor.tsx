@@ -36,6 +36,7 @@ import { ParamFormItems } from '../components/ParamFormItems';
 import {
   isNodeConfigured,
   layeredLayout,
+  missingRequiredParams,
   validateDag,
   type ComponentFlowNode,
   type ComponentNodeData,
@@ -285,6 +286,8 @@ function FlowCanvas() {
   }, []);
   const canUndo = historyState.index > 0;
   const canRedo = historyState.index < historyState.size - 1;
+  // 未保存标记：历史栈指针不在栈顶（有未保存的编辑）
+  const isDirty = historyState.size > 0 && historyState.index === historyState.size - 1 && historyState.index > 0;
 
   /**
    * 生成历史快照。刻意剥掉 React Flow 注入的瞬态字段（selected / dragging / measured）：
@@ -546,6 +549,10 @@ function FlowCanvas() {
           padding: '8px 16px',
           marginBottom: 8,
           borderRadius: 8,
+          border: `1px solid ${p.border}`,
+          boxShadow: dark
+            ? '0 1px 2px rgba(0,0,0,.24), 0 4px 16px rgba(0,0,0,.28)'
+            : '0 1px 2px rgba(20,30,48,.04), 0 4px 16px rgba(20,30,48,.06)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -557,21 +564,28 @@ function FlowCanvas() {
           </Button>
           <Typography.Text strong>
             {job ? `${job.name}（v${job.version}）` : '作业画布'}
+            {isDirty && (
+              <span style={{ color: FIXED.warnBadge, marginLeft: 6, fontSize: 12 }} title="有未保存的更改">
+                ●
+              </span>
+            )}
           </Typography.Text>
         </Space>
-        <Space>
-          <Button
-            icon={<UndoOutlined />}
-            onClick={undo}
-            disabled={!canUndo}
-            title="撤销（Ctrl+Z）"
-          />
-          <Button
-            icon={<RedoOutlined />}
-            onClick={redo}
-            disabled={!canRedo}
-            title="重做（Ctrl+Shift+Z / Ctrl+Y）"
-          />
+        <Space split={<span style={{ width: 1, height: 16, background: p.border, display: 'inline-block' }} />}>
+          <Space size={4}>
+            <Button
+              icon={<UndoOutlined />}
+              onClick={undo}
+              disabled={!canUndo}
+              title="撤销（Ctrl+Z）"
+            />
+            <Button
+              icon={<RedoOutlined />}
+              onClick={redo}
+              disabled={!canRedo}
+              title="重做（Ctrl+Shift+Z / Ctrl+Y）"
+            />
+          </Space>
           <Button icon={<LayoutOutlined />} onClick={onAutoLayout}>
             自动布局
           </Button>
@@ -599,6 +613,10 @@ function FlowCanvas() {
                 height: '100%',
                 background: p.surface,
                 borderRadius: 8,
+                border: `1px solid ${p.border}`,
+                boxShadow: dark
+                  ? '0 1px 2px rgba(0,0,0,.24), 0 4px 16px rgba(0,0,0,.28)'
+                  : '0 1px 2px rgba(20,30,48,.04), 0 4px 16px rgba(20,30,48,.06)',
                 padding: 12,
                 overflow: 'auto',
               }}
@@ -639,7 +657,14 @@ function FlowCanvas() {
             </div>
           )}
           {panelCollapsed && (
-            <div style={{ height: '100%', background: dark ? p.node : p.surfaceMuted, borderRadius: 8 }} />
+            <div
+              style={{
+                height: '100%',
+                background: dark ? p.node : p.surfaceMuted,
+                borderRadius: 8,
+                border: `1px solid ${p.border}`,
+              }}
+            />
           )}
           {/* 悬停面板区域时出现折叠/展开按钮：半透明、垂直居中、直边贴栏、外侧半圆 */}
           {panelHover && (
@@ -661,9 +686,12 @@ function FlowCanvas() {
             overflow: 'hidden',
             background: p.canvas,
             position: 'relative',
+            border: `1px solid ${p.border}`,
             boxShadow: dragOverCanvas
               ? `0 0 0 2px ${p.accent}, 0 0 20px rgba(${p.brandSeedRgb},.25)`
-              : 'none',
+              : dark
+                ? '0 1px 2px rgba(0,0,0,.24), 0 4px 16px rgba(0,0,0,.28)'
+                : '0 1px 2px rgba(20,30,48,.04), 0 4px 16px rgba(20,30,48,.06)',
             transition: 'box-shadow 0.2s ease',
           }}
         >
@@ -702,15 +730,30 @@ function FlowCanvas() {
             colorMode={dark ? 'dark' : 'light'}
           >
             <Background gap={16} color={p.canvasDot} />
-            <Controls />
+            <Controls
+              style={{
+                background: p.surface,
+                border: `1px solid ${p.border}`,
+                borderRadius: 8,
+                boxShadow: dark
+                  ? '0 2px 8px rgba(0,0,0,.3)'
+                  : '0 2px 8px rgba(31,45,61,.1)',
+              }}
+            />
             <MiniMap
               nodeColor={(n) => {
                 const cat = (n.data as ComponentNodeData).category;
-                return cat ? categoryColor(cat, dark) : '#78839a';
+                return cat ? categoryColor(cat, dark) : p.borderStrong;
               }}
               maskColor={p.minimapMask}
               bgColor={p.surface}
-              style={{ borderRadius: 8 }}
+              style={{
+                borderRadius: 8,
+                border: `1px solid ${p.border}`,
+                boxShadow: dark
+                  ? '0 2px 8px rgba(0,0,0,.3)'
+                  : '0 2px 8px rgba(31,45,61,.1)',
+              }}
               pannable
               zoomable
             />
@@ -815,9 +858,67 @@ function FlowCanvas() {
       >
         {selectedNode && (
           <>
-            <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-              控件编码：{selectedNode.data.componentCode}
-            </Typography.Paragraph>
+            {/* 控件信息区 */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                marginBottom: 12,
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: categoryBg(selectedNode.data.category, dark),
+                border: `1px solid ${categoryColor(selectedNode.data.category, dark)}33`,
+              }}
+            >
+              <span style={{ fontSize: 16, color: categoryColor(selectedNode.data.category, dark) }}>
+                {CATEGORY_ICON[selectedNode.data.category]}
+              </span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: p.text }}>
+                  {selectedNode.data.name}
+                </div>
+                <div style={{ fontSize: 11, color: p.textSubtle, fontFamily: 'monospace' }}>
+                  {selectedNode.data.componentCode}
+                </div>
+              </div>
+            </div>
+
+            {/* 必填项进度 */}
+            {(() => {
+              const required = selectedNode.data.schema?.required ?? [];
+              const missing = missingRequiredParams(selectedNode.data);
+              const filled = required.length - missing.length;
+              return required.length > 0 ? (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                    <span style={{ color: p.textMuted }}>必填项配置进度</span>
+                    <span style={{ color: missing.length === 0 ? FIXED.okBadge : FIXED.warnBadge, fontWeight: 600 }}>
+                      {filled}/{required.length}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      height: 4,
+                      borderRadius: 2,
+                      background: dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${(filled / required.length) * 100}%`,
+                        borderRadius: 2,
+                        background: missing.length === 0 ? FIXED.okBadge : FIXED.warnBadge,
+                        transition: 'width 0.3s ease',
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : null;
+            })()}
+
             <Form form={paramForm} layout="vertical" onValuesChange={onParamValuesChange}>
               <ParamFormItems schema={selectedNode.data.schema} />
             </Form>
