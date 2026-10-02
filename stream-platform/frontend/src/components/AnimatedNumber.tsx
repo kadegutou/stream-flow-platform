@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { usePrefersReducedMotion } from '../utils/motion';
 
 /** easeOutExpo：起步快、末尾缓，数字滚动观感更自然 */
 function easeOutExpo(t: number): number {
@@ -7,7 +8,8 @@ function easeOutExpo(t: number): number {
 
 /**
  * 数字滚动动画：挂载时从 0 滚到目标值，后续值变化时从当前值平滑过渡。
- * 用于监控页指标卡，让吞吐/行数的变化在演示时可见。
+ * 用于监控页指标卡与首页统计条，让数值变化在演示时可见。
+ * 尊重 prefers-reduced-motion：减少动态时直接跳变不滚动。
  */
 export function AnimatedNumber({
   value,
@@ -18,11 +20,17 @@ export function AnimatedNumber({
   duration?: number;
   format?: (n: number) => string;
 }) {
+  const reduced = usePrefersReducedMotion();
   const [display, setDisplay] = useState(0);
   const fromRef = useRef(0);
   const rafRef = useRef<number>();
 
   useEffect(() => {
+    if (reduced) {
+      setDisplay(value);
+      fromRef.current = value;
+      return;
+    }
     const from = fromRef.current;
     const to = value;
     if (from === to) {
@@ -44,7 +52,7 @@ export function AnimatedNumber({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       fromRef.current = to; // 动画被打断（值又变了）时，以当前目标作为新起点
     };
-  }, [value, duration]);
+  }, [value, duration, reduced]);
 
   return <>{format(Math.round(display))}</>;
 }

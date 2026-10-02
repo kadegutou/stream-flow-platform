@@ -99,7 +99,7 @@ export default function Users() {
         locale={{ emptyText: <EmptyState description="暂无用户" /> }}
         rowClassName={(_, i) => (i % 2 === 1 ? 'sp-table-row-striped' : '')}
         columns={[
-          { title: 'ID', dataIndex: 'id', width: 70 },
+          { title: 'ID', dataIndex: 'id', width: 70, className: 'sp-table-num' },
           { title: '用户名', dataIndex: 'username' },
           { title: '昵称', dataIndex: 'nickname' },
           {

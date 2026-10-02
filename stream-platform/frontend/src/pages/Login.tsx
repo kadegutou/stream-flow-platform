@@ -174,9 +174,10 @@ export default function Login() {
             拖拉拽编排数据治理作业，一键上线持续处理。
           </div>
           <div style={{ marginTop: 32 }}>
-            {FEATURES.map((f) => (
+            {FEATURES.map((f, i) => (
               <div
                 key={f.text}
+                className="sp-login-feature"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -184,6 +185,7 @@ export default function Login() {
                   marginTop: 14,
                   color: `rgba(${LOGIN.whiteRgb},.85)`,
                   fontSize: 14,
+                  animationDelay: `${0.3 + i * 0.12}s`,
                 }}
               >
                 <span
@@ -197,6 +199,15 @@ export default function Login() {
                     justifyContent: 'center',
                     fontSize: 16,
                     flexShrink: 0,
+                    transition: 'background 0.2s ease, transform 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = `rgba(${LOGIN.whiteRgb},.22)`;
+                    e.currentTarget.style.transform = 'scale(1.08)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = `rgba(${LOGIN.whiteRgb},.12)`;
+                    e.currentTarget.style.transform = 'scale(1)';
                   }}
                 >
                   {f.icon}

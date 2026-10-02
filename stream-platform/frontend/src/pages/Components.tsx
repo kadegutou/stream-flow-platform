@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Card, Col, Collapse, Row, Typography } from 'antd';
+import { Card, Col, Collapse, Row, Skeleton, Typography } from 'antd';
 import { AppstoreOutlined } from '@ant-design/icons';
 import { listComponents } from '../api/components';
 import { showApiError } from '../api/request';
@@ -8,10 +8,12 @@ import { CategoryTag } from '../components/CategoryTag';
 import { CATEGORY_LABEL } from '../theme/category';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
+import { useThemeStore } from '../store/theme';
 
 const CATEGORY_ORDER: ComponentCategory[] = ['SOURCE', 'PROCESS', 'SINK'];
 
 export default function Components() {
+  const dark = useThemeStore((s) => s.dark);
   const [data, setData] = useState<ComponentDef[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -29,12 +31,17 @@ export default function Components() {
   }));
 
   return (
-    <Card loading={loading} styles={{ body: { paddingTop: 16 } }}>
+    <Card styles={{ body: { paddingTop: 16 } }}>
       <PageHeader
         icon={<AppstoreOutlined />}
         title="控件列表"
         subtitle="20 个内置控件，统一 SPI 接口，参数由 JSON Schema 动态渲染"
       />
+      {loading && (
+        <div style={{ padding: '24px 0' }}>
+          <Skeleton active paragraph={{ rows: 8 }} title={{ width: 200 }} />
+        </div>
+      )}
       {!loading && data.length === 0 && <EmptyState description="暂无控件" />}
       {grouped.map(
         (group) =>
@@ -48,10 +55,11 @@ export default function Components() {
                   <Col key={comp.id} xs={24} sm={12} md={8} lg={6}>
                     <Card
                       size="small"
+                      className="sp-component-card"
                       title={
                         <span>
                           {comp.name}
-                          <Typography.Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
+                          <Typography.Text type="secondary" style={{ marginLeft: 8, fontSize: 12, fontFamily: 'monospace' }}>
                             {comp.code}
                           </Typography.Text>
                         </span>
@@ -76,7 +84,20 @@ export default function Components() {
                               key: 'schema',
                               label: '参数 Schema',
                               children: (
-                                <pre style={{ fontSize: 12, maxHeight: 240, overflow: 'auto', margin: 0 }}>
+                                <pre
+                                  style={{
+                                    fontSize: 12,
+                                    maxHeight: 240,
+                                    overflow: 'auto',
+                                    margin: 0,
+                                    padding: 12,
+                                    borderRadius: 8,
+                                    background: dark ? '#0d1117' : '#f6f8fa',
+                                    color: dark ? '#a5d6ff' : '#1f2328',
+                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                    lineHeight: 1.6,
+                                  }}
+                                >
                                   {JSON.stringify(comp.paramSchema, null, 2)}
                                 </pre>
                               ),

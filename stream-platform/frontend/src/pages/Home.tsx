@@ -6,6 +6,7 @@ import { homePalette, type HomePalette } from '../theme/home';
 import { SPACING, FONT_SIZE, RADIUS } from '../theme/tokens';
 import { listJobs } from '../api/jobs';
 import { listWorkers, listJobInstances } from '../api/instances';
+import { AnimatedNumber } from '../components/AnimatedNumber';
 import {
   UnorderedListOutlined,
   AppstoreOutlined,
@@ -848,7 +849,7 @@ function fmtNum(n: number): string {
   return String(n);
 }
 
-function StatItem({ label, value, sub, palette }: { label: string; value: string; sub: string; palette: HomePalette }) {
+function StatItem({ label, value, sub, palette, formatNum }: { label: string; value: number; sub: string; palette: HomePalette; formatNum?: boolean }) {
   return (
     <div style={{ textAlign: 'center', minWidth: 100 }}>
       <div
@@ -874,7 +875,7 @@ function StatItem({ label, value, sub, palette }: { label: string; value: string
           marginBottom: SPACING.xs - 2,
         }}
       >
-        {value}
+        <AnimatedNumber value={value} format={formatNum ? fmtNum : (n) => n.toLocaleString()} />
       </div>
       <div
         style={{
@@ -920,7 +921,64 @@ function StatsBar({ palette }: { palette: HomePalette }) {
     return () => { alive = false; clearInterval(timer); };
   }, []);
 
-  if (!stats) return null;
+  if (!stats) {
+    // 加载骨架：与全站「骨架屏替代 Spin」原则一致
+    return (
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          gap: SPACING.xxl,
+          marginBottom: SPACING.xl - 4,
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} style={{ textAlign: 'center', minWidth: 100 }}>
+            <div
+              style={{
+                fontSize: FONT_SIZE.xs - 1,
+                fontWeight: 600,
+                fontFamily: 'ui-monospace, monospace',
+                letterSpacing: 1.5,
+                color: palette.textSecondary,
+                opacity: 0.3,
+                marginBottom: SPACING.xs,
+              }}
+            >
+              ···
+            </div>
+            <div
+              className="sp-stats-skeleton"
+              style={{
+                fontSize: FONT_SIZE.xxl - 2,
+                fontWeight: 800,
+                fontFamily: 'ui-monospace, monospace',
+                lineHeight: 1.2,
+                marginBottom: SPACING.xs - 2,
+                height: 28,
+                width: 60,
+                margin: '0 auto',
+                borderRadius: 4,
+              }}
+            />
+            <div
+              style={{
+                fontSize: FONT_SIZE.xs - 2,
+                fontFamily: 'ui-monospace, monospace',
+                letterSpacing: 1,
+                color: palette.textSecondary,
+                opacity: 0.3,
+              }}
+            >
+              加载中
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -933,10 +991,10 @@ function StatsBar({ palette }: { palette: HomePalette }) {
         zIndex: 1,
       }}
     >
-      <StatItem label="WORKERS" value={String(stats.workers)} sub="在线节点" palette={palette} />
-      <StatItem label="JOBS" value={String(stats.jobs)} sub="作业总数" palette={palette} />
-      <StatItem label="RUNNING" value={String(stats.running)} sub="运行中实例" palette={palette} />
-      <StatItem label="ROWS" value={fmtNum(stats.totalRows)} sub="累计处理" palette={palette} />
+      <StatItem label="WORKERS" value={stats.workers} sub="在线节点" palette={palette} />
+      <StatItem label="JOBS" value={stats.jobs} sub="作业总数" palette={palette} />
+      <StatItem label="RUNNING" value={stats.running} sub="运行中实例" palette={palette} />
+      <StatItem label="ROWS" value={stats.totalRows} sub="累计处理" palette={palette} formatNum />
     </div>
   );
 }

@@ -724,6 +724,52 @@ html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-shutters i:nth-child(5) {
   to   { transform: translateY(0); }
 }
 
+/* 控件面板项 hover：浮起 + 阴影 + 光带 */
+.sp-palette-item:hover {
+  box-shadow: 0 2px 8px rgba(var(--sp-accent-rgb), 0.12), 0 0 0 1px rgba(var(--sp-accent-rgb), 0.08);
+  transform: translateX(2px);
+}
+.sp-palette-item:active {
+  cursor: grabbing;
+  transform: scale(0.98);
+}
+
+/* 控件列表卡片 hover：浮起 + 阴影 */
+.sp-component-card {
+  transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
+}
+.sp-component-card:hover {
+  box-shadow: 0 4px 16px rgba(var(--sp-accent-rgb), 0.12), 0 0 0 1px rgba(var(--sp-accent-rgb), 0.08);
+  transform: translateY(-2px);
+}
+
+/* 登录页 FEATURES stagger 入场动画 */
+.sp-login-feature {
+  opacity: 0;
+  animation: spLoginFeatureIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes spLoginFeatureIn {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 首页指标骨架屏呼吸动画 */
+.sp-stats-skeleton {
+  background: linear-gradient(90deg, rgba(var(--sp-accent-rgb), 0.08) 25%, rgba(var(--sp-accent-rgb), 0.15) 50%, rgba(var(--sp-accent-rgb), 0.08) 75%);
+  background-size: 200% 100%;
+  animation: spStatsSkeleton 1.5s ease-in-out infinite;
+}
+@keyframes spStatsSkeleton {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* ---------- 微交互细节 ---------- */
 
 /* 按钮：hover 微抬升 + active 缩放反馈 */

@@ -55,8 +55,11 @@ function ComponentNode(props: NodeProps<ComponentFlowNode>) {
   const p = palette(dark);
   const color = categoryColor(data.category, dark);
   const bg = categoryBg(data.category, dark);
+  const [hovered, setHovered] = useState(false);
   return (
     <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         display: 'flex',
         alignItems: 'stretch',
@@ -64,13 +67,18 @@ function ComponentNode(props: NodeProps<ComponentFlowNode>) {
         background: dark ? p.node : p.surface,
         minWidth: 176,
         overflow: 'hidden',
-        border: `1px solid ${selected ? color : p.border}`,
+        border: `1px solid ${selected ? color : hovered ? p.borderStrong : p.border}`,
         boxShadow: selected
           ? `0 0 0 3px ${color}33, 0 6px 16px rgba(0,0,0,.35)`
-          : dark
-            ? '0 2px 8px rgba(0,0,0,.4)'
-            : '0 2px 8px rgba(31,45,61,.10)',
-        transition: 'box-shadow .15s, border-color .15s',
+          : hovered
+            ? dark
+              ? '0 4px 12px rgba(0,0,0,.5)'
+              : '0 4px 12px rgba(31,45,61,.16)'
+            : dark
+              ? '0 2px 8px rgba(0,0,0,.4)'
+              : '0 2px 8px rgba(31,45,61,.10)',
+        transition: 'box-shadow .2s ease, border-color .2s ease, transform .2s ease',
+        transform: hovered && !selected ? 'translateY(-1px)' : 'none',
       }}
     >
       <Handle type="target" position={Position.Left} />
@@ -117,13 +125,16 @@ function ComponentNode(props: NodeProps<ComponentFlowNode>) {
 
 const nodeTypes = { component: ComponentNode };
 
-/** 连线样式：平滑贝塞尔 + 流动虚线动画 */
-const FLOW_EDGE_STYLE = {
-  type: 'smoothstep' as const,
-  animated: true,
-  // 描边色原为 #9aa4b8：白底上仅 2.51:1，投影后连线发虚；#78839a 提到 3.81:1
-  style: { stroke: '#78839a', strokeWidth: 1.8 },
-};
+/** 连线样式：平滑贝塞尔 + 流动虚线动画，颜色走主题 token */
+function useFlowEdgeStyle() {
+  const dark = useThemeStore((s) => s.dark);
+  const p = palette(dark);
+  return {
+    type: 'smoothstep' as const,
+    animated: true,
+    style: { stroke: dark ? p.borderStrong : p.textMuted, strokeWidth: 1.8 },
+  };
+}
 
 /** 碎裂动画的单个粒子参数 */
 interface ShatterParticle {
@@ -181,9 +192,11 @@ function FlowCanvas() {
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const { hover: panelHover, handlers: panelHoverHandlers } = useEdgeHover();
   const [draggingNode, setDraggingNode] = useState(false);
+  const [dragOverCanvas, setDragOverCanvas] = useState(false);
   const [trashActive, setTrashActive] = useState(false);
   const [shatter, setShatter] = useState<ShatterState | null>(null);
   const reduced = usePrefersReducedMotion();
+  const flowEdgeStyle = useFlowEdgeStyle();
   const [tourOpen, setTourOpen] = useState(false);
   const nodeSeq = useRef(1);
   const trashRef = useRef<HTMLDivElement>(null);
@@ -242,7 +255,7 @@ function FlowCanvas() {
           id: `e${i}-${e.from}-${e.to}`,
           source: e.from,
           target: e.to,
-          ...FLOW_EDGE_STYLE,
+          ...flowEdgeStyle,
         }));
         nodeSeq.current = maxSeq + 1;
         // 有内容时做一次分层布局，让加载出来的图更整齐
@@ -361,7 +374,7 @@ function FlowCanvas() {
     (conn: Connection) =>
       setEdges((eds) =>
         addEdge(
-          { ...conn, id: `e-${conn.source}-${conn.target}-${Date.now()}`, ...FLOW_EDGE_STYLE },
+          { ...conn, id: `e-${conn.source}-${conn.target}-${Date.now()}`, ...flowEdgeStyle },
           eds,
         ),
       ),
@@ -604,6 +617,7 @@ function FlowCanvas() {
                       draggable
                       onDragStart={(e) => onDragStart(e, comp)}
                       title={comp.description}
+                      className="sp-palette-item"
                       style={{
                         border: `1px solid ${categoryColor(comp.category, dark)}`,
                         borderLeft: `4px solid ${categoryColor(comp.category, dark)}`,
@@ -613,6 +627,7 @@ function FlowCanvas() {
                         cursor: 'grab',
                         background: dark ? p.node : FIXED.paletteItemBg,
                         fontSize: 13,
+                        transition: 'box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease',
                       }}
                     >
                       {comp.name}
@@ -638,7 +653,20 @@ function FlowCanvas() {
         </div>
 
         {/* 画布 */}
-        <div ref={canvasWrapRef} style={{ flex: 1, borderRadius: 8, overflow: 'hidden', background: p.canvas, position: 'relative' }}>
+        <div
+          ref={canvasWrapRef}
+          style={{
+            flex: 1,
+            borderRadius: 8,
+            overflow: 'hidden',
+            background: p.canvas,
+            position: 'relative',
+            boxShadow: dragOverCanvas
+              ? `0 0 0 2px ${p.accent}, 0 0 20px rgba(${p.brandSeedRgb},.25)`
+              : 'none',
+            transition: 'box-shadow 0.2s ease',
+          }}
+        >
           {/* 碎裂动画关键帧（小方块坠落出画布底部） */}
           <style>{`
             @keyframes sp-shatter-fall {
@@ -653,11 +681,16 @@ function FlowCanvas() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onDrop={onDrop}
+            onDrop={(e) => {
+              setDragOverCanvas(false);
+              onDrop(e);
+            }}
             onDragOver={(e) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = 'move';
+              setDragOverCanvas(true);
             }}
+            onDragLeave={() => setDragOverCanvas(false)}
             onNodeClick={(_, node) => setSelectedNodeId(node.id)}
             onPaneClick={() => setSelectedNodeId(null)}
             onNodeDragStart={() => setDraggingNode(true)}
@@ -694,7 +727,7 @@ function FlowCanvas() {
                 width: 120,
                 height: 64,
                 borderRadius: 12,
-                border: `2px dashed ${trashActive ? FIXED.trashDanger : '#bbb'}`,
+                border: `2px dashed ${trashActive ? FIXED.trashDanger : dark ? p.borderStrong : p.borderStrong}`,
                 background: trashActive
                   ? dark
                     ? '#3a1f24'
