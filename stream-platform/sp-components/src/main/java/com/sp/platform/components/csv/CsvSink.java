@@ -5,6 +5,7 @@ import com.sp.platform.common.Row;
 import com.sp.platform.common.spi.ComponentDef;
 import com.sp.platform.common.spi.Sink;
 import com.sp.platform.components.Params;
+import com.sp.platform.components.shard.ShardUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -120,14 +121,9 @@ public class CsvSink implements Sink {
         return "none".equals(quoteMode) ? value : CsvParser.escape(value, delimiter);
     }
 
-    /** out.csv → out.part{shardIndex}.csv；无扩展名则直接追加。 */
+    /** out.csv → out.part{shardIndex}.csv；无扩展名则直接追加。实现已下沉到 {@link ShardUtils}。 */
     public static String shardPath(String path, int shardIndex) {
-        int dot = path.lastIndexOf('.');
-        int slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-        if (dot > slash) {
-            return path.substring(0, dot) + ".part" + shardIndex + path.substring(dot);
-        }
-        return path + ".part" + shardIndex;
+        return ShardUtils.shardPath(path, shardIndex);
     }
 
     @Override

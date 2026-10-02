@@ -132,4 +132,59 @@ public final class ShardUtils {
             in.close();
         }
     }
+
+    // ==================== 行区间分片（用于不可随机定位的输入） ====================
+
+    /**
+     * 行区间：分片 i 负责的 <b>数据行序号</b> 半开区间 {@code [start, endExclusive)}，
+     * 序号从 0 开始、不含表头。
+     *
+     * <p>用于 xlsx 这类「压缩容器」输入：sheet1.xml 被 deflate 压缩，无法像 CSV 那样
+     * 按字节偏移定位到第 N 行，因此改用行序号切分——每个分片仍从文件头顺序解析，
+     * 但只物化落在自己区间内的行（其余行直接跳过，不做单元格解析与共享串查表）。
+     */
+    public record RowRange(long start, long endExclusive) {
+
+        /** 本分片负责的行数（可为 0：总行数少于分片数时部分分片为空）。 */
+        public long count() {
+            return Math.max(0, endExclusive - start);
+        }
+
+        /** 行序号是否落在本分片区间内。 */
+        public boolean contains(long row) {
+            return row >= start && row < endExclusive;
+        }
+
+        /** 是否已越过本分片区间（用于提前终止解析）。 */
+        public boolean passed(long row) {
+            return row >= endExclusive;
+        }
+    }
+
+    /** 计算分片 i 的行区间 {@code [totalRows*i/n, totalRows*(i+1)/n)}，与字节切分同公式。 */
+    public static RowRange rowRange(long totalRows, int shardIndex, int totalShards) {
+        if (shardIndex < 0 || shardIndex >= totalShards || totalShards < 1) {
+            throw new IllegalArgumentException(
+                    "非法分片参数: shardIndex=" + shardIndex + ", totalShards=" + totalShards);
+        }
+        long rows = Math.max(0, totalRows);
+        long start = rows * shardIndex / totalShards;
+        long end = rows * (shardIndex + 1) / totalShards;
+        return new RowRange(start, end);
+    }
+
+    // ==================== 分片输出路径 ====================
+
+    /**
+     * 分片输出路径：{@code out.csv → out.part0.csv}，无扩展名时直接追加后缀。
+     * csv-sink / hdfs-sink / excel-sink 共用同一规则，下游按 {@code *.part*} 通配汇总。
+     */
+    public static String shardPath(String path, int shardIndex) {
+        int dot = path.lastIndexOf('.');
+        int slash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+        if (dot > slash) {
+            return path.substring(0, dot) + ".part" + shardIndex + path.substring(dot);
+        }
+        return path + ".part" + shardIndex;
+    }
 }

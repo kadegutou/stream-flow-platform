@@ -76,4 +76,49 @@ class ShardUtilsTest {
         }
         return lines;
     }
+
+    // ==================== 行区间分片（xlsx 等不可随机定位的输入） ====================
+
+    @Test
+    void rowRangeTilesWholeFileWithoutGapOrOverlap() {
+        assertEquals(new ShardUtils.RowRange(0, 25), ShardUtils.rowRange(100, 0, 4));
+        assertEquals(new ShardUtils.RowRange(75, 100), ShardUtils.rowRange(100, 3, 4));
+        // 首尾相接、从 0 起、覆盖到 totalRows：任何行数下都不重不漏
+        for (long total = 0; total <= 40; total++) {
+            long cursor = 0;
+            for (int i = 0; i < 7; i++) {
+                ShardUtils.RowRange r = ShardUtils.rowRange(total, i, 7);
+                assertEquals(cursor, r.start(), "分片区间必须首尾相接");
+                cursor = r.endExclusive();
+            }
+            assertEquals(total, cursor, "最后一个分片的右端点必须等于总行数");
+        }
+        assertThrows(IllegalArgumentException.class, () -> ShardUtils.rowRange(100, 4, 4));
+        assertThrows(IllegalArgumentException.class, () -> ShardUtils.rowRange(100, -1, 4));
+        assertThrows(IllegalArgumentException.class, () -> ShardUtils.rowRange(100, 0, 0));
+    }
+
+    @Test
+    void rowRangeHandlesFewerRowsThanShards() {
+        // 行数少于分片数：部分分片区间为空，但整体仍恰好覆盖全部行
+        int nonEmpty = 0;
+        for (int i = 0; i < 4; i++) {
+            ShardUtils.RowRange r = ShardUtils.rowRange(3, i, 4);
+            if (r.count() > 0) {
+                nonEmpty++;
+            }
+        }
+        assertEquals(3, nonEmpty);
+        assertEquals(0, ShardUtils.rowRange(0, 0, 4).count());
+    }
+
+    @Test
+    void shardPathAppendsPartSuffixBeforeExtension() {
+        assertEquals("out.part0.csv", ShardUtils.shardPath("out.csv", 0));
+        assertEquals("/tmp/a/out.part2.csv", ShardUtils.shardPath("/tmp/a/out.csv", 2));
+        assertEquals("C:\\tmp\\out.part1.xlsx", ShardUtils.shardPath("C:\\tmp\\out.xlsx", 1));
+        // 无扩展名：直接追加后缀（不能被目录名里的点误判）
+        assertEquals("/tmp.d/out.part0", ShardUtils.shardPath("/tmp.d/out", 0));
+        assertEquals("out.part3", ShardUtils.shardPath("out", 3));
+    }
 }
