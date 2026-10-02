@@ -295,7 +295,7 @@ export default function AppLayout() {
             position: 'relative',
             height: 56,
             lineHeight: '56px',
-            zIndex: 20,
+            zIndex: 5,
           }}
         >
           {/* 品牌蓝发丝渐变线：贴 Header 底部，1px，左→右 透明→品牌蓝→透明 */}

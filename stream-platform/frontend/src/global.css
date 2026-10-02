@@ -233,7 +233,7 @@ html:not([data-sp-dark='true']) .sp-route-transition > em {
 /* 登录/退出转场：有百叶窗遮盖，不用 clip-path 扫出，直接淡出 */
 .sp-route-transition.sp-rt-login.is-entering,
 .sp-route-transition.sp-rt-logout.is-entering {
-  animation: spRouteAuthReveal 1.59s cubic-bezier(0.76, 0, 0.24, 1) both;
+  animation: spRouteAuthReveal 1.15s cubic-bezier(0.76, 0, 0.24, 1) both;
 }
 .sp-route-transition.is-entering .sp-route-copy {
   animation: spRouteContentOut 0.48s cubic-bezier(0.7, 0, 0.84, 0) 80ms both;
@@ -265,9 +265,9 @@ html:not([data-sp-dark='true']) .sp-route-transition > em {
   0%, 18% { clip-path: inset(0); visibility: visible; }
   to      { clip-path: inset(0 0 0 100%); visibility: hidden; }
 }
-/* 登录/退出：百叶窗升起（920ms）→ 停 0.15s → 滑出 0.52s */
+/* 登录/退出转场：百叶窗升起（250ms）→ 停 80ms → 滑出 470ms */
 @keyframes spRouteAuthReveal {
-  0%, 67% { clip-path: inset(0); visibility: visible; opacity: 1; }
+  0%, 31% { clip-path: inset(0); visibility: visible; opacity: 1; }
   to      { clip-path: inset(0 100% 0 0); visibility: hidden; opacity: 1; }
 }
 @keyframes spRouteContentOut {
@@ -489,12 +489,15 @@ html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-log-line:last-child {
   letter-spacing: -0.02em;
 }
 
-/* 表格行 hover：左侧品牌蓝竖条 + 背景色 */
+/* 表格行 hover：左侧品牌蓝竖条 + 背景色渐变过渡 */
 .sp-content .ant-table-tbody > tr > td {
-  transition: background 0.2s ease;
+  transition: background 0.25s ease, box-shadow 0.25s ease;
 }
 .sp-content .ant-table-tbody > tr:hover > td:first-child {
-  box-shadow: inset 2px 0 0 var(--sp-accent);
+  box-shadow: inset 3px 0 0 var(--sp-accent);
+}
+.sp-content .ant-table-tbody > tr:hover > td {
+  background: rgba(var(--sp-accent-rgb), 0.04) !important;
 }
 
 /* 表格行点击态：短暂高亮 */
@@ -560,49 +563,25 @@ html[data-sp-dark='true'] ::-webkit-scrollbar-thumb:hover {
   background-image:
     radial-gradient(
       ellipse 70% 40% at 50% -8%,
-      rgba(var(--sp-brand-seed-rgb), 0.055),
+      rgba(var(--sp-brand-seed-rgb), 0.08),
       transparent 70%
     ),
-    radial-gradient(circle, var(--sp-canvas-dot) 0.5px, transparent 0.5px);
-  background-size: 100% 100%, 24px 24px;
+    radial-gradient(circle, var(--sp-canvas-dot) 0.8px, transparent 0.8px);
+  background-size: 100% 100%, 28px 28px;
 }
 
 /*
  * 卡片：微边框 + 柔和分层投影，替代 antd 默认的硬边框。
- * 边框提供基础分层，阴影提供浮起感，两者叠加让卡片在浅色模式下也清晰可见。
+ * 边框提供基础分层，阴影提供浮起感。
  */
 .sp-content .ant-card {
   border: 1px solid var(--sp-border);
   box-shadow: var(--sp-shadow-card);
-  /* 顶部渐变光带：hover 时从左到右淡出的品牌蓝发丝线 */
-  position: relative;
-  overflow: hidden;
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
 }
-.sp-content .ant-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, var(--sp-accent), transparent 60%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-  z-index: 1;
-}
-.sp-content .ant-card:hover::before {
-  opacity: 1;
-}
-html[data-sp-dark='true'] .sp-content .ant-card {
-  border-color: var(--sp-border);
-  box-shadow: var(--sp-shadow-card);
-}
-
-/* 卡片悬停微抬升（仅表格外的信息卡，避免表格行悬停时抖动） */
 .sp-content .ant-card:hover {
   box-shadow: var(--sp-shadow-hover);
-  transition: box-shadow 0.25s ease;
+  border-color: var(--sp-border-strong);
 }
 
 /* ---------- 页面切换动效 ---------- */
@@ -663,15 +642,15 @@ html[data-sp-dark='true'] .sp-content .ant-card {
   75% { transform: translate(6px, -12px) scale(1.1); opacity: 0.5; }
 }
 
-/* 侧边栏菜单项 hover：微放大（配合十字光标包住效果） */
+/* 侧边栏菜单项 hover：只改背景色，不做缩放（避免触发布局空隙） */
 .sp-sider-item {
-  transition: transform 0.2s ease-out, background 0.18s;
+  transition: background 0.18s;
 }
 .sp-sider-item:hover {
-  transform: scale(1.04);
+  background: rgba(255,255,255,0.04);
 }
 .sp-sider-item.is-active:hover {
-  transform: scale(1.02);
+  background: rgba(47,84,235,.16);
 }
 
 /* 首页十字光标：隐藏系统光标（body 级，覆盖侧边栏等所有子元素） */
@@ -702,7 +681,7 @@ body:has(.sp-home-crosshair) * {
   display: block;
   background: #0d1420;
   transform: translateY(101%);
-  animation: spShutterRise 0.5s cubic-bezier(0.76, 0, 0.24, 1) forwards;
+  animation: spShutterRise 0.25s cubic-bezier(0.76, 0, 0.24, 1) forwards;
 }
 /* 深浅交替，中间一条用强调色 */
 .sp-rt-shutters i:nth-child(3n) {
@@ -747,10 +726,16 @@ html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-shutters i:nth-child(5) {
 
 /* ---------- 微交互细节 ---------- */
 
-/* 按钮 active 态微缩放反馈 */
+/* 按钮：hover 微抬升 + active 缩放反馈 */
+.sp-content .ant-btn {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.sp-content .ant-btn:hover:not(:disabled):not(.ant-btn-link):not(.ant-btn-text) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(var(--sp-accent-rgb), 0.15);
+}
 .sp-content .ant-btn:active:not(:disabled) {
-  transform: scale(0.97);
-  transition: transform 0.1s ease;
+  transform: scale(0.96);
 }
 
 /* 输入框 focus 品牌蓝光晕 */
@@ -762,29 +747,30 @@ html:not([data-sp-dark='true']) .sp-rt-logout .sp-rt-shutters i:nth-child(5) {
 .sp-content .ant-input-number-focused,
 .sp-content .ant-select-focused .ant-select-selector,
 .sp-content .ant-picker-focused {
-  box-shadow: 0 0 0 3px rgba(var(--sp-accent-rgb), 0.12) !important;
+  box-shadow: 0 0 0 3px rgba(var(--sp-accent-rgb), 0.18) !important;
+  border-color: var(--sp-accent) !important;
 }
 
 /* Switch 滑动动画增强 */
 .sp-content .ant-switch {
-  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .sp-content .ant-switch .ant-switch-handle {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Tooltip 渐入动画 */
 .ant-tooltip {
-  animation: spTooltipIn 0.15s ease-out;
+  animation: spTooltipIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes spTooltipIn {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(6px) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 

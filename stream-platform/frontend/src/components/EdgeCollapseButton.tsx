@@ -21,8 +21,8 @@ export function useEdgeHover(edgeZone = 40, middleBand = 100) {
 }
 
 /**
- * 侧栏折叠按钮：半透明、垂直居中、直边贴栏、外侧半圆。
- * 用 <button> 而非 <div>，键盘可聚焦/回车触发，并提供 aria-label 与 aria-expanded。
+ * 侧栏折叠按钮：品牌蓝渐变圆形徽章，带发光边框和阴影。
+ * hover 时微放大 + 光晕增强，与平台 Kylin 风格呼应。
  */
 export function EdgeCollapseButton({
   collapsed,
@@ -36,6 +36,8 @@ export function EdgeCollapseButton({
   label: string;
 }) {
   const p = palette(dark);
+  const [hovered, setHovered] = useState(false);
+
   return (
     <button
       type="button"
@@ -44,31 +46,34 @@ export function EdgeCollapseButton({
       title={label}
       aria-label={label}
       aria-expanded={!collapsed}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         position: 'absolute',
         top: '50%',
-        right: -16,
-        transform: 'translateY(-50%)',
-        width: 26,
-        height: 60,
+        right: -14,
+        transform: `translateY(-50%) scale(${hovered ? 1.12 : 1})`,
+        width: 28,
+        height: 28,
         padding: 0,
-        borderRadius: '0 26px 26px 0',
-        background: dark ? `rgba(${p.whiteRgb},.14)` : `rgba(${p.whiteRgb},.92)`,
-        border: `1px solid ${dark ? `rgba(${p.whiteRgb},.16)` : `rgba(${p.inkRgb},.1)`}`,
-        borderLeft: 'none',
-        boxShadow: dark ? 'none' : `0 2px 8px rgba(${p.inkRgb},.12)`,
+        borderRadius: '50%',
+        background: p.accentGradient,
+        border: `1.5px solid ${dark ? `rgba(${p.accentLightRgb},.5)` : `rgba(${p.brandSeedRgb},.3)`}`,
+        boxShadow: hovered
+          ? `0 0 16px rgba(${p.brandSeedRgb},.5), 0 4px 12px rgba(${p.inkRgb},.25)`
+          : `0 2px 8px rgba(${p.brandSeedRgb},.35), 0 1px 3px rgba(${p.inkRgb},.15)`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
         zIndex: 20,
-        color: dark ? `rgba(${p.whiteRgb},.75)` : p.textMuted,
+        color: '#fff',
         fontSize: 11,
         userSelect: 'none',
-        transition: 'background .2s, color .2s',
+        transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease',
       }}
     >
-      {collapsed ? <RightOutlined /> : <LeftOutlined />}
+      {collapsed ? <RightOutlined style={{ fontSize: 10, fontWeight: 700 }} /> : <LeftOutlined style={{ fontSize: 10, fontWeight: 700 }} />}
     </button>
   );
 }
