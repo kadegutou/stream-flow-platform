@@ -3,15 +3,22 @@ package com.sp.platform.components.shard;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
+import java.math.MathContext;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
- * 文件字节切片工具（设计文档 §7 横向扩展：大文件按字节偏移切片，按行边界对齐）。
- * csv-source / hdfs-source 共用同一套逻辑。
+ * 分片切分工具（设计文档 §7 横向扩展）。平台共三种切分口径，公式同构（均为 {@code size*i/n} 均分）：
+ * <ul>
+ *   <li><b>字节区间</b>{@link #range}——可随机定位的文本文件，csv-source / hdfs-source 共用；</li>
+ *   <li><b>行区间</b>{@link #rowRange}——不可随机定位的压缩容器（xlsx），excel-source 使用；</li>
+ *   <li><b>数值区间</b>{@link #valueRange}——数据库输入，按分片列取值区间下推到 SQL，JDBC 源使用。</li>
+ * </ul>
+ * 三者共用「区间首尾相接 + 末分片不设上界」的不重不漏保证。
  *
- * <p>切分规则：文件按大小均分为 n 个区间，分片 i 的原始区间为
+ * <p>字节切分规则：文件按大小均分为 n 个区间，分片 i 的原始区间为
  * {@code [size*i/n, size*(i+1)/n)}（endExclusive）。为保证分片间不重复不丢失：
  * <ul>
  *   <li>start &gt; 0 时起点可能落在某行中间，丢弃第一行（该行由上一分片负责读完）；</li>
@@ -171,6 +178,53 @@ public final class ShardUtils {
         long start = rows * shardIndex / totalShards;
         long end = rows * (shardIndex + 1) / totalShards;
         return new RowRange(start, end);
+    }
+
+    // ==================== 数值区间分片（用于数据库输入） ====================
+
+    /**
+     * 数值区间：分片 i 负责的分片列取值半开区间 {@code [startInclusive, endExclusive)}。
+     *
+     * <p>{@code unboundedEnd=true} 表示末分片不设上界（只判下界）——与字节区间 / 行区间
+     * 「末分片不设上界」的原则一致，既可容忍边界探测偏差，也能让作业运行期间新写入的、
+     * 分片键更大的行被末分片接管。
+     */
+    public record ValueRange(BigDecimal startInclusive, BigDecimal endExclusive, boolean unboundedEnd) {
+    }
+
+    /**
+     * 计算分片 i 的取值区间，公式与 {@link #range} / {@link #rowRange} 同构：
+     * {@code start = min + (max-min)*i/n}、{@code end = min + (max-min)*(i+1)/n}。
+     *
+     * <p><b>边界严格相接</b>：分片 i 的 end 与分片 i+1 的 start 由同一个表达式求值，
+     * 因此即便除法引入舍入，两者也必然相等——既不会重叠、也不会留缝。取值恰好等于边界时
+     * 归入上界一侧的分片（{@code >= start} 命中，{@code < end} 排除）。
+     *
+     * <p>末分片返回的 {@code endExclusive} 为 {@code null}（不设上界）。
+     * 当 {@code min == max}（分片列取值全相同）时，除末分片外各区间均为空，
+     * 全部数据由末分片承接——仍然不重不漏，只是负载不均。
+     */
+    public static ValueRange valueRange(BigDecimal min, BigDecimal max,
+                                        int shardIndex, int totalShards) {
+        if (shardIndex < 0 || shardIndex >= totalShards || totalShards < 1) {
+            throw new IllegalArgumentException(
+                    "非法分片参数: shardIndex=" + shardIndex + ", totalShards=" + totalShards);
+        }
+        if (min == null || max == null) {
+            throw new IllegalArgumentException("分片上下界不能为 null（空表或分片列全为 NULL）");
+        }
+        BigDecimal span = max.subtract(min);
+        BigDecimal n = BigDecimal.valueOf(totalShards);
+        BigDecimal lower = offset(min, span, shardIndex, n);
+        if (shardIndex == totalShards - 1) {
+            return new ValueRange(lower, null, true);
+        }
+        return new ValueRange(lower, offset(min, span, shardIndex + 1, n), false);
+    }
+
+    private static BigDecimal offset(BigDecimal min, BigDecimal span, int index, BigDecimal n) {
+        return min.add(span.multiply(BigDecimal.valueOf(index), MathContext.DECIMAL128)
+                .divide(n, MathContext.DECIMAL128));
     }
 
     // ==================== 分片输出路径 ====================

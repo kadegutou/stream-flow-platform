@@ -19,6 +19,8 @@ import com.sp.platform.components.jdbc.AbstractJdbcSource;
                     "username":  {"type": "string",  "title": "用户名"},
                     "password":  {"type": "string",  "title": "密码"},
                     "sql":       {"type": "string",  "title": "查询 SQL"},
+                    "shardColumn": {"type": "string", "title": "分片列（并行度>1 时必填）",
+                                    "description": "数值型列名，如 id。并行度>1 时平台按该列取值区间切分数据；留空则拒绝并行"},
                     "batchSize": {"type": "integer", "title": "批大小", "default": 5000}
                   }
                 }

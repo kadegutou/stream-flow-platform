@@ -6,14 +6,21 @@ import org.junit.jupiter.api.Test;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** 字节切片：分片读行不重复、不丢失（含 UTF-8 多字节与边界恰好在行首的情况）。 */
+/**
+ * 三种切分口径的不重不漏保证：
+ * 字节区间（csv/hdfs）、行区间（xlsx）、数值区间（数据库）。
+ */
 class ShardUtilsTest {
 
     @Test
@@ -120,5 +127,79 @@ class ShardUtilsTest {
         // 无扩展名：直接追加后缀（不能被目录名里的点误判）
         assertEquals("/tmp.d/out.part0", ShardUtils.shardPath("/tmp.d/out", 0));
         assertEquals("out.part3", ShardUtils.shardPath("out", 3));
+    }
+
+    // ==================== 数值区间分片（数据库输入） ====================
+
+    @Test
+    void valueRangeTilesWholeDomainWithoutGapOrOverlap() {
+        ShardUtils.ValueRange r0 = ShardUtils.valueRange(bd(0), bd(100), 0, 4);
+        assertEquals(0, r0.startInclusive().compareTo(bd(0)));
+        assertEquals(0, r0.endExclusive().compareTo(bd(25)));
+        assertFalse(r0.unboundedEnd());
+
+        ShardUtils.ValueRange r3 = ShardUtils.valueRange(bd(0), bd(100), 3, 4);
+        assertEquals(0, r3.startInclusive().compareTo(bd(75)));
+        assertTrue(r3.unboundedEnd(), "末分片不设上界");
+        assertNull(r3.endExclusive());
+
+        // 任意下界/上界/分片数组合下，相邻区间必须首尾严格相接（不重不漏的根本保证）
+        List<BigDecimal> lows = List.of(bd(-1000), bd(-1), bd(0), bd(3), bd(7));
+        List<BigDecimal> highs = List.of(bd(-1), bd(0), bd(7), bd(13), bd(1_000_000));
+        for (int n = 2; n <= 7; n++) {
+            for (BigDecimal lo : lows) {
+                for (BigDecimal hi : highs) {
+                    if (hi.compareTo(lo) < 0) {
+                        continue;
+                    }
+                    for (int i = 0; i + 1 < n; i++) {
+                        BigDecimal end = ShardUtils.valueRange(lo, hi, i, n).endExclusive();
+                        BigDecimal nextStart = ShardUtils.valueRange(lo, hi, i + 1, n).startInclusive();
+                        assertEquals(0, end.compareTo(nextStart),
+                                "分片 " + i + " 的 end 必须等于分片 " + (i + 1) + " 的 start"
+                                        + "（lo=" + lo + ", hi=" + hi + ", n=" + n + "）");
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void valueRangeHandlesNonIntegralAndDegenerate() {
+        // 除不尽（10/3）时边界仍严格相接：同一表达式求值，舍入结果必然相同
+        ShardUtils.ValueRange a = ShardUtils.valueRange(bd(0), bd(10), 0, 3);
+        ShardUtils.ValueRange b = ShardUtils.valueRange(bd(0), bd(10), 1, 3);
+        assertEquals(0, a.endExclusive().compareTo(b.startInclusive()));
+
+        // 负数下界同样按 (max-min) 均分
+        ShardUtils.ValueRange neg = ShardUtils.valueRange(bd(-50), bd(50), 1, 4);
+        assertEquals(0, neg.startInclusive().compareTo(bd(-25)));
+        assertEquals(0, neg.endExclusive().compareTo(bd(0)));
+
+        // min == max（分片列取值全相同）：除末分片外区间全空，数据整体由末分片承接，仍不重不漏
+        for (int i = 0; i < 3; i++) {
+            ShardUtils.ValueRange empty = ShardUtils.valueRange(bd(7), bd(7), i, 4);
+            assertEquals(0, empty.startInclusive().compareTo(bd(7)));
+            assertEquals(0, empty.endExclusive().compareTo(bd(7)), "空区间");
+        }
+        assertTrue(ShardUtils.valueRange(bd(7), bd(7), 3, 4).unboundedEnd());
+
+        // 单分片：区间自下界起、无上界
+        ShardUtils.ValueRange single = ShardUtils.valueRange(bd(0), bd(100), 0, 1);
+        assertEquals(0, single.startInclusive().compareTo(bd(0)));
+        assertTrue(single.unboundedEnd());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ShardUtils.valueRange(bd(0), bd(100), 4, 4));
+        assertThrows(IllegalArgumentException.class,
+                () -> ShardUtils.valueRange(bd(0), bd(100), 0, 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> ShardUtils.valueRange(null, bd(100), 0, 2));
+        assertThrows(IllegalArgumentException.class,
+                () -> ShardUtils.valueRange(bd(0), null, 0, 2));
+    }
+
+    private static BigDecimal bd(long v) {
+        return BigDecimal.valueOf(v);
     }
 }
