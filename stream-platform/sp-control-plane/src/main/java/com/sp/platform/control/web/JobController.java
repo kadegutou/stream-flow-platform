@@ -41,9 +41,16 @@ public class JobController {
     /**
      * 不支持并行分片的数据源：不读取 shardIndex/totalShards，并行度>1 时每个分片
      * 执行同一条 SQL → 输出 N 倍重复数据。
-     * （对比 csv-source / hdfs-source 按字节切片、excel-source 按行区间切分）
+     * 目前 csv-source（字节切片）、hdfs-source（字节切片）、excel-source（行区间）、
+     * mysql/postgresql/oracle-source（分片列取值区间）均已支持，故本集合为空；
+     * 保留该机制，以便后续新增源控件时按需登记。
      */
-    private static final Set<String> NON_SHARDABLE_SOURCES = Set.of(
+    private static final Set<String> NON_SHARDABLE_SOURCES = Set.of();
+
+    /**
+     * JDBC 源：并行分片依赖「分片列」，作业必须显式声明（见 {@link #validateJdbcShardColumn}）。
+     */
+    private static final Set<String> JDBC_SOURCES = Set.of(
             "mysql-source", "postgresql-source", "oracle-source");
 
     /**
@@ -93,7 +100,7 @@ public class JobController {
 
     /**
      * 分片兼容性校验：并行度>1 时，DAG 中若含不支持并行分片的源/汇控件则拒绝。
-     * 防止 N 倍重复数据（JDBC 源）与并发写文件损坏（未登记分片输出的汇）。
+     * 防止 N 倍重复数据与并发写文件损坏（未登记分片输出的汇）。
      * 空 DAG（未编排的占位图）直接放行，交 DAG 校验负责。
      */
     private static void validateShardCompatibility(Dag dag, int parallelism) {
@@ -105,13 +112,34 @@ public class JobController {
             if (NON_SHARDABLE_SOURCES.contains(code)) {
                 throw ApiException.badRequest("控件 " + code + " 不支持并行分片：并行度>1 时每个分片会读取全量数据"
                         + "造成 N 倍重复输出。请将并行度设为 1，或改用支持分片的源"
-                        + "（csv-source / hdfs-source / excel-source）");
+                        + "（csv-source / hdfs-source / excel-source / mysql/postgresql/oracle-source）");
             }
             if (NON_SHARDABLE_SINKS.contains(code)) {
                 throw ApiException.badRequest("控件 " + code + " 不支持并行分片：并行度>1 时多个分片会并发写同一文件"
                         + "导致数据互相覆盖/文件损坏。请将并行度设为 1，或改用支持分片输出的汇"
                         + "（csv-sink / hdfs-sink / excel-sink）");
             }
+            if (JDBC_SOURCES.contains(code)) {
+                validateJdbcShardColumn(n);
+            }
+        }
+    }
+
+    /**
+     * JDBC 源并行分片的必填参数校验。
+     *
+     * <p>数据库输入无法像文件那样按字节/行号切分，只能按「分片列的取值区间」切分，
+     * 因此必须由作业声明分片列；缺了它无法切分。此处拒绝，而不是放行后让每个分片
+     * 各读一遍全量（那会产生 N 倍重复数据）。
+     */
+    private static void validateJdbcShardColumn(Dag.Node node) {
+        Object v = node.params() == null ? null : node.params().get("shardColumn");
+        if (v == null || String.valueOf(v).isBlank()) {
+            throw ApiException.badRequest("控件 " + node.componentCode()
+                    + " 并行度>1 时必须指定分片列 shardColumn（数值型列名，如 id）："
+                    + "平台按该列的取值区间把数据均分给各分片，未指定则无法切分"
+                    + "（放行会让每个分片各读全量，产生 N 倍重复数据）。"
+                    + "请补上该参数，或把并行度设为 1");
         }
     }
 
