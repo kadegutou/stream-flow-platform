@@ -129,12 +129,18 @@ const nodeTypes = { component: ComponentNode };
 /** 连线样式：平滑贝塞尔 + 流动虚线动画，颜色走主题 token */
 function useFlowEdgeStyle() {
   const dark = useThemeStore((s) => s.dark);
-  const p = palette(dark);
-  return {
-    type: 'smoothstep' as const,
-    animated: true,
-    style: { stroke: dark ? p.borderStrong : p.textMuted, strokeWidth: 1.8 },
-  };
+  /**
+   * 必须固定对象身份：调用方会把它放进 useEffect / useCallback 的依赖数组，
+   * 每次渲染返回新对象会让依赖判断永远失效（也会让下面的"主题切换重刷连线"effect 每帧重跑）。
+   */
+  return useMemo(() => {
+    const p = palette(dark);
+    return {
+      type: 'smoothstep' as const,
+      animated: true,
+      style: { stroke: dark ? p.borderStrong : p.textMuted, strokeWidth: 1.8 },
+    };
+  }, [dark]);
 }
 
 /** 碎裂动画的单个粒子参数 */
@@ -268,6 +274,9 @@ function FlowCanvas() {
         showApiError(e, '加载作业失败');
       }
     })();
+    // 只在 id 变化时重新加载作业：把 flowEdgeStyle 加进依赖会导致"切主题就重载画布"，
+    // 丢掉未保存的编辑；主题切换对已有连线的更新由下方单独的 effect 负责。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   /* ---------- 撤销 / 重做 ---------- */
@@ -315,7 +324,13 @@ function FlowCanvas() {
       const snapshot = snapshotOf(nodes, edges);
       const stack = historyRef.current;
       const cur = stack[historyIndexRef.current];
-      if (cur && JSON.stringify(cur) === JSON.stringify(snapshot)) return;
+      // 连线只按拓扑（id / 起点 / 终点）比较：样式随主题变化不该被算作一次编辑
+      const topology = (snap: { nodes: unknown; edges: Edge[] }) =>
+        JSON.stringify({
+          nodes: snap.nodes,
+          edges: snap.edges.map((e) => `${e.id}|${e.source}|${e.target}`),
+        });
+      if (cur && topology(cur) === topology(snapshot)) return;
       stack.splice(historyIndexRef.current + 1); // 产生新分支时丢弃重做栈
       stack.push(snapshot);
       if (stack.length > 60) stack.shift(); // 上限 60 步，防内存增长
@@ -381,8 +396,14 @@ function FlowCanvas() {
           eds,
         ),
       ),
-    [],
+    [flowEdgeStyle],
   );
+
+  // 主题切换时刷新已有连线的样式（与加载 effect 分工：那个只在 id 变化时跑）
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    setEdges((eds) => eds.map((e) => ({ ...e, ...flowEdgeStyle })));
+  }, [flowEdgeStyle]);
 
   // 拖入控件
   const onDragStart = (e: React.DragEvent, comp: ComponentDef) => {
