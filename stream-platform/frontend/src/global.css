@@ -659,6 +659,14 @@ body:has(.sp-home-crosshair) * {
   cursor: none !important;
 }
 
+/*
+ * 非首页的侧边栏十字框：只让菜单条隐藏系统光标（十字框由 SiderCrosshair 绘制），
+ * 页面其他区域保持系统默认光标。首页不命中此规则——那时上面那条已全局隐藏光标。
+ */
+body:not(:has(.sp-home-crosshair)) .sp-sider-item {
+  cursor: none !important;
+}
+
 /* 像素故障：Kylin 风格，离散 steps 闪烁 */
 @keyframes spPixelFault {
   0%, 88%, 100% { opacity: 0; transform: translate(0); }

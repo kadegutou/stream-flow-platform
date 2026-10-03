@@ -14,6 +14,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { useRouteTransition } from './RouteTransition';
 import { EdgeCollapseButton, useEdgeHover } from './EdgeCollapseButton';
 import { IconActionButton } from './IconActionButton';
+import SiderCrosshair from './SiderCrosshair';
 import { Suspense, useMemo, useState } from 'react';
 import { useAuthStore } from '../store/auth';
 import { MAX_FONT_SCALE, MIN_FONT_SCALE, useFontScaleStore, useThemeStore } from '../store/theme';
@@ -279,6 +280,8 @@ export default function AppLayout() {
           />
         )}
       </div>
+      {/* 首页之外的侧边栏十字框：只框菜单条，首页由 Home 自己的十字框接管 */}
+      <SiderCrosshair dark={dark} />
       <Layout>
         <Header
           style={{
