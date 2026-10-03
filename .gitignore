@@ -21,3 +21,13 @@ Thumbs.db
 
 # 前端构建缓存
 **/tsconfig.tsbuildinfo
+
+# 本地临时产物（不入库）
+__pycache__/
+temp/
+_audit/
+1.md
+vm-ssh.py
+enable-wsl2.bat
+sp-src.tar.gz
+deliverables/项目源码包.zip
