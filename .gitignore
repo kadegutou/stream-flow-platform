@@ -10,6 +10,17 @@ logs/
 *.log
 stream-platform/data/*.csv
 
+# 导出链路临时产物
+**/.export_tmp/
+_tmp_export/
+tmp/
+temp/
+
+# Python 缓存 / 评审中间产物
+__pycache__/
+*.pyc
+_audit/
+
 # IDE
 .idea/
 .vscode/
@@ -30,4 +41,3 @@ _audit/
 vm-ssh.py
 enable-wsl2.bat
 sp-src.tar.gz
-deliverables/项目源码包.zip

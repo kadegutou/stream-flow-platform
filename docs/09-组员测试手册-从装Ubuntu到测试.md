@@ -61,7 +61,7 @@ VMware 菜单 → 新建虚拟机 → 自定义：
 VM → 编辑设置 → CD/DVD → 使用 ISO 映像文件 → 选下载的 `ubuntu-24.04-autoinstall.iso` → 确定 → 启动 VM。
 
 **第 2 步：等它自己装**（约 5~10 分钟，**全程不用看屏幕**）：
-- 自动完成：语言 en、整盘 LVM 分区、建用户 `ubuntu`（密码 `ubuntu123`）、装好 OpenSSH、apt 已换清华源
+- 自动完成：语言 en、整盘 LVM 分区、建用户 `ubuntu`（密码在打包 ISO 时设定，问组长索取）、装好 OpenSSH、apt 已换清华源
 - 装完**自动重启**
 - 重启后进 VM → 编辑设置 → CD/DVD → **移除 ISO**（避免下次开机又从 ISO 引导）
 
@@ -75,11 +75,11 @@ VM → 编辑设置 → CD/DVD → 使用 ISO 映像文件 → 选下载的 `ubu
 
 1. **语言**：English（避免中文编码坑）
 2. **键盘**：默认
-3. **网络**：自动 DHCP 即可（NAT 下会拿到类似 `192.168.x.x` 的地址）
+3. **网络**：自动 DHCP 即可（NAT 下会拿到一个内网地址，形如 `x.x.x.x`）
 4. **代理**：留空
 5. **镜像源**：默认（慢就选清华源）
 6. **磁盘分区**：选 **Use an entire disk**（整个盘），一路默认
-7. **用户名**：`ubuntu`，密码 `ubuntu123`
+7. **用户名**：`ubuntu`，密码：自行设定（不要用弱口令）
 8. **OpenSSH**：**务必勾选 Install OpenSSH server** ← 关键，不装就没法远程登录
 9. 其余默认，等装完自动重启
 
@@ -91,27 +91,27 @@ VM → 编辑设置 → CD/DVD → 使用 ISO 映像文件 → 选下载的 `ubu
 - 方式一：装完启动后，VM 的登录界面会直接显示本机 IP（在 `ubuntu-sp login:` 上方）；或
 - 方式二：在 VM 里登录后执行：
 ```bash
-hostname -I     # 例：192.168.5.135（换成你自己 VM 的地址）
+hostname -I     # 例：x.x.x.x（换成你自己 VM 的地址）
 ```
 
 **第 2 步：宿主机打开终端**
 - 推荐 **Git Bash**（装 Git 时自带）；PowerShell / CMD 也可以。
 
-**第 3 步：连接**（把 IP 换成你自己的）
+**第 3 步：连接**（把地址换成你自己的）
 ```bash
-ssh ubuntu@192.168.5.135
+ssh ubuntu@<你的VM地址>
 ```
 
 **第 4 步：首次连接确认**
 第一次连接会提示 host key 指纹，输入 `yes` 回车：
 ```
-The authenticity of host '192.168.5.135' can't be established.
+The authenticity of host '<你的VM地址>' can't be established.
 ...
 Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
 ```
 
 **第 5 步：输密码**
-提示 `ubuntu@192.168.5.135's password:` 时输入 `ubuntu123`。
+提示 `ubuntu@<你的VM地址>'s password:` 时输入你自己设定的密码。
 > ⚠️ 密码输入时**不显示任何字符**（不是卡了），输完直接回车。
 
 **第 6 步：登录成功的标志**
@@ -121,7 +121,7 @@ Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
 
 | 现象 | 排查 |
 |---|---|
-| `ping 192.168.x.x` 不通 | VM 网络模式要是 **NAT**（默认）；VMware NAT 服务没启动则用**管理员** PowerShell 执行 `net start "VMware NAT Service"` |
+| `ping <你的VM地址>` 不通 | VM 网络模式要是 **NAT**（默认）；VMware NAT 服务没启动则用**管理员** PowerShell 执行 `net start "VMware NAT Service"` |
 | ping 通、SSH 拒绝连接 | 装系统时没勾 OpenSSH：VM 里执行 `sudo apt install -y openssh-server` 再试 |
 | 提示密码错误 | 注意大小写；输入时不回显，别多敲空格 |
 | 一直转圈超时 | VM 网卡没起来，重启 VM 再试 |
@@ -129,11 +129,11 @@ Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
 **（推荐）配置 SSH 免密**，之后传文件、反复登录都省心：
 ```bash
 # 宿主机执行，输一次密码后以后免密
-ssh-copy-id ubuntu@192.168.5.135
-ssh ubuntu@192.168.5.135      # 这次不用输密码
+ssh-copy-id ubuntu@<你的VM地址>
+ssh ubuntu@<你的VM地址>      # 这次不用输密码
 
 # 传文件到 VM：
-scp 本地文件 ubuntu@192.168.5.135:~/
+scp 本地文件 ubuntu@<你的VM地址>:~/
 ```
 
 **多开窗口**：用 Windows Terminal / MobaXterm 多开标签，一个窗口跑部署、一个看日志，别都挤在一个 SSH 里。

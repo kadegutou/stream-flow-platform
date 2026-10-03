@@ -18,7 +18,7 @@
 无需预先 `mvn package` / `npm build`——后端与前端镜像均在 Docker 内多阶段构建。
 
 ```bash
-git clone <仓库地址> stream-platform
+git clone https://github.com/kadegutou/stream-flow-platform.git stream-platform
 cd stream-platform/deploy
 docker compose up -d --build
 ```
@@ -54,6 +54,8 @@ docker compose down -v       # 连数据卷一起删除（MySQL/Kafka/共享数�
 | mysql | mysql:8.4 | 3306 | 元数据库，首启自动建库建表 |
 | redis | redis:7-alpine | 6379 | redis-enrich 补数控件数据源 |
 | kafka | apache/kafka:3.9.1 | 9092 | KRaft 单 broker |
+
+![图 3-1　Docker Compose 部署拓扑（6 个容器 + 共享卷）](figures/fig-07-部署拓扑.png)
 
 ### 3.1 登录验证
 
@@ -109,7 +111,7 @@ docker compose up -d --scale worker=3
 - 调度器每 5s 把 PENDING 分片按「负载最少优先」派给在线 Worker，新 Worker 注册后自动参与分配；
 - 并行度 >1 的文件作业：csv-source 按字节切片，csv-sink 输出 `xxx.partN.csv` 分文件；Kafka 作业按分区消费；
 - Worker 心跳超时 30s 其分片自动重置重派（故障自愈）；
-- 对比实验：`--scale worker=1` 跑基准 → `--scale worker=3` 再跑，吞吐应近线性增长（瓶颈在磁盘 I/O 时除外）。
+- 对比实验：`--scale worker=1` 跑基准 → `--scale worker=3` 再跑，吞吐应有明显提升（实测加速比与瓶颈分析见《性能测试报告》§4.2）。
 
 ## 5. 配置说明
 
@@ -177,3 +179,60 @@ frontend/Dockerfile           # 前端镜像（node 构建 + nginx 托管）
 frontend/nginx.conf           # /api 反代 + history 路由 fallback
 .dockerignore                 # 构建上下文裁剪（target/node_modules/日志/数据文件）
 ```
+
+## 8. 运行环境说明
+
+> 本节是**本作品全部环境参数（CPU / 内存 / 磁盘 / Docker 版本）的唯一权威来源**。
+> 性能测试报告与各测试报告只写"见《部署文档》§8 测试机 X"，不再各自复述数字——
+> 以避免同一份交付物内出现互相矛盾的环境描述。全部参数均来自测试机上实测命令的输出。
+
+### 8.1 测试机 A —— 正式基准环境
+
+用于：**性能测试（《性能测试报告》）、端到端集成测试（docs/08）、演示录像**。
+
+| 项 | 配置 | 采集命令 |
+|---|---|---|
+| 虚拟化 | VMware Workstation 17 虚拟机 | — |
+| CPU | 8 vCPU | `lscpu` |
+| 内存 | 24 GB | `free -h` |
+| 磁盘 | 300 GB 虚拟磁盘（NVMe SSD，ROTA=0） | `lsblk -d -o NAME,ROTA,SIZE` |
+| 操作系统 | Ubuntu Server 24.04.4 LTS | `cat /etc/os-release` |
+| Docker | 29.1 | `docker version` |
+| Docker Compose | v2.40 | `docker compose version` |
+| 运行时 | JDK 21（eclipse-temurin:21-jre 容器） | — |
+
+### 8.2 测试机 B —— 机械盘测试机
+
+用于：**数据质量与异常测试（docs/12）、输入/输出控件测试（docs/10）、处理控件测试（docs/11）**。
+
+| 项 | 配置 | 采集命令 |
+|---|---|---|
+| 虚拟化 | VMware 虚拟机 | — |
+| CPU | 8 vCPU（宿主 Intel i7-14700） | `lscpu` |
+| 内存 | 28.4 GB（十进制）= 27 GiB（二进制），`MemTotal 28407588 kB` | `free -h` |
+| 磁盘 | 300 GB，**ROTA=1（机械盘）** | `lsblk -d -o NAME,ROTA,SIZE` |
+| 操作系统 | Ubuntu 24.04.4 LTS | `cat /etc/os-release` |
+| Docker | 29.7.2 | `docker version` |
+| Docker Compose | v5.5.0（新版独立 CLI） | `docker compose version` |
+
+> **关于"内存 27GB / 28.4GB"的消歧**：二者是**同一台机器的同一个读数**，只是单位不同——
+> `MemTotal 28407588 kB` = **28.4 GB（十进制）** = **27.09 GiB（二进制）**。
+> 因此文档中出现的 27GB 与 28.4GB **都指测试机 B**，不是两台机器。
+
+> **关于磁盘类型的消歧**：赛题建议基准为"8vCPU / 32GB / 机械硬盘"。测试机 A 的宿主仅有一块
+> NVMe SSD、无机械硬盘，故 A 的虚拟磁盘为 SSD（性能高于机械盘）；测试机 B 为 ROTA=1 机械盘，
+> 更接近赛题基准。磁盘类型以 `lsblk` 的 `ROTA` 字段为准（**注意**：虚拟机中该字段不一定反映
+> 真实介质，故同时给出宿主磁盘型号供核对）。
+
+### 8.3 引用规则
+
+| 文档 | 使用的测试机 | 应写 |
+|---|---|---|
+| 《性能测试报告》§2.1 | 测试机 A | 见《部署文档》§8.1 |
+| docs/08 端到端集成测试报告 | 测试机 A | 见《部署文档》§8.1 |
+| docs/10 输入/输出控件测试报告 | 测试机 B | 见《部署文档》§8.2 |
+| docs/11 处理控件测试报告 | 测试机 B | 见《部署文档》§8.2 |
+| docs/12 数据质量与异常测试报告 | 测试机 B | 见《部署文档》§8.2 |
+| docs/04 性能测试预演记录 | 开发笔记本（非验收环境） | 仅供方法验证，数字不作引用 |
+
+> **提示**：两台机器的吞吐数字**不可直接比较**（磁盘介质不同）。跨机器引用时务必标注机型。

@@ -141,17 +141,22 @@ bash scripts/shard-test.sh
 
 | 文件 | 说明 |
 |---|---|
+| 项目创意与价值分析.docx | 市场需求 / 竞品对比 / 创新点 / 商业与社会价值（源：docs/00） |
 | 概要设计说明书.docx | 架构与模块设计（源：docs/01） |
 | 数据库设计说明书.docx | 表结构与调度状态机（源：docs/02） |
 | 部署文档.docx | Docker Compose 一键部署（源：deploy/README-deploy.md） |
 | 性能测试报告.docx | 正式基准环境实测：三档数据量 + 分片横向扩展（源：docs/05） |
 | 完整测试报告.docx | 功能测试合册：E2E 5 场景 + 14 IO 控件 + 6 处理控件 62 断言 + 10 数据质量用例（源：docs/08/10/11/12 + docs/13 头部） |
 | 作品演示录像.mp4 | 演示：拖拽编排 / 扇出 / 横向扩展 / 性能实测（源：docs/06 分镜脚本） |
-| 项目源码包.zip | 全部源码（`git archive HEAD:stream-platform`） |
+| 项目源码包.zip | 全部源码（`stream-platform/scripts/pack_source.py` 打包，剔构建产物） |
+
+> 文档类交付物由 Markdown 源导出，**请勿直接改 docx**：改 `docs/**.md` 后按
+> [`stream-platform/scripts/README-export.md`](stream-platform/scripts/README-export.md)
+> 三步（画图 → 导出 → 审计）重新生成。
 
 ## 横向扩展
 
-- **Kafka 场景**：每个分片是同一消费组里的一个消费者，靠 Kafka rebalance 自动分配分区（非显式分片↔分区绑定），扩 Worker 即扩消费者，吞吐随分区数近线性增长
+- **Kafka 场景**：每个分片是同一消费组里的一个消费者，靠 Kafka rebalance 自动分配分区（非显式分片↔分区绑定），扩 Worker 即扩消费者，吞吐随分区数增长（并行度不宜超过分区数）
 - **文件场景**：大文件按字节区间切片（行边界对齐），多 Worker 并行读，输出为分文件
 - **数据库场景**：JDBC 源按**分片列取值区间**切片（探测 `MIN/MAX` 后均分，区间谓词下推、可走索引 range scan），需在源控件填 `shardColumn`（数值型列名）；未填则并行度>1 被拒，避免每个分片各读全量
 - **故障自愈**：Worker 心跳超时 30s → 其分片自动重新派发
