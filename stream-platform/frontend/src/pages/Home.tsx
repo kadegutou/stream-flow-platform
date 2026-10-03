@@ -1316,7 +1316,7 @@ export default function Home() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
           gap: 16,
           width: '100%',
           maxWidth: 800,
@@ -1325,21 +1325,16 @@ export default function Home() {
         }}
       >
         {QUICK_LINKS.map((link, i) => (
-          <div
+          <QuickCard
             key={link.label}
-            className="sp-quick-card-enter"
-            style={{ animationDelay: `${0.5 + i * 0.1}s` }}
-          >
-            <QuickCard
-              icon={link.icon}
-              label={link.label}
-              sub={link.sub}
-              desc={link.desc}
-              index={i}
-              onClick={() => transitionTo(link.path)}
-              palette={palette}
-            />
-          </div>
+            icon={link.icon}
+            label={link.label}
+            sub={link.sub}
+            desc={link.desc}
+            index={i}
+            onClick={() => transitionTo(link.path)}
+            palette={palette}
+          />
         ))}
       </div>
 
