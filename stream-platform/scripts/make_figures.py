@@ -280,9 +280,11 @@ def fig_perf():
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.6))
     fig.patch.set_facecolor('white')
     # 数据来源：2026-10-04 T4 重跑批次（每格 1 次预热 + 3 次取中位数），权威口径见 docs/05 §4.2。
-    # † 该格跨批次不稳定：另一批次以同配置（6 分片 / 1 Worker）测得 26.4s，与 4 分片持平。
+    # ※（U+203B）该格跨批次不稳定：另一批次以同配置（6 分片 / 1 Worker）测得 26.4s，与 4 分片持平。
     #   证据只支持「提升到 6 分片无额外收益」，不支持「6 分片更慢」，故单列并加注说明。
-    cfgs = ['1000万\np1 (1 Worker)', '1000万\np4 (1 Worker)', '1000万\np6 (3 Worker) †', '5000万\np6 (3 Worker)']
+    #   注意：此处**不要**用 †(U+2020) —— Word 保存时会因字体缺字映射把它丢掉（实测 3 处全丢），
+    #   脚注就失去了指代对象。U+203B 属中日韩标点区，中文字体必备。
+    cfgs = ['1000万\np1 (1 Worker)', '1000万\np4 (1 Worker)', '1000万\np6 (3 Worker) ※', '5000万\np6 (3 Worker)']
     secs = [38.5, 16.2, 35.6, 50.8]
     tput = [26.0, 61.7, 28.1, 98.4]
     colors = ['#8c8c8c', C_CP, '#597ef7', C_OK]
@@ -322,7 +324,7 @@ def fig_perf():
     fig.suptitle('横向扩展实测（测试机 A：8 vCPU / 24GB / 300GB 虚拟磁盘　·　场景 csv→拼接→csv）',
                  fontsize=11.5, color=C_TXT, y=1.03)
     fig.text(0.5, -0.04,
-             '† 该格跨批次不稳定：另一批次同配置（6 分片 / 1 Worker）测得 26.4s，与 4 分片持平。'
+             '※ 该格跨批次不稳定：另一批次同配置（6 分片 / 1 Worker）测得 26.4s，与 4 分片持平。'
              '证据只支持「提升到 6 分片无额外收益」，见《性能测试报告》§4.2。',
              ha='center', fontsize=7.6, color=C_LINE)
     fig.tight_layout()
