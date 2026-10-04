@@ -147,7 +147,7 @@ bash scripts/shard-test.sh
 | 部署文档.docx | Docker Compose 一键部署（源：deploy/README-deploy.md） |
 | 性能测试报告.docx | 正式基准环境实测：三档数据量 + 分片横向扩展（源：docs/05） |
 | 完整测试报告.docx | 功能测试合册：E2E 5 场景 + 14 IO 控件 + 6 处理控件 62 断言 + 10 数据质量用例（源：docs/08/10/11/12 + docs/13 头部） |
-| 作品演示录像.mp4 | 演示：拖拽编排 / 扇出 / 横向扩展 / 性能实测（源：docs/06 分镜脚本） |
+| 作品演示录像.mp4 | 演示：拖拽编排 / 扇出 / 横向扩展 / 性能实测（源：docs/06 分镜脚本）；**时长 4 分 55 秒**，满足赛题「不超过 5 分钟」 |
 | 项目源码包.zip | 全部源码（`stream-platform/scripts/pack_source.py` 打包，剔构建产物） |
 
 > 文档类交付物由 Markdown 源导出，**请勿直接改 docx**：改 `docs/**.md` 后按
