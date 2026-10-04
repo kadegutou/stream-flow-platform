@@ -41,3 +41,6 @@ _audit/
 vm-ssh.py
 enable-wsl2.bat
 sp-src.tar.gz
+
+# 演示录像：体积大（128MB）且改版频繁，不入库，交付时单独发送
+deliverables/作品演示录像.mp4
