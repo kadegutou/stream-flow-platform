@@ -58,6 +58,11 @@ MANIFEST = [
                   'docs/11-处理控件测试报告.md',
                   'docs/12-数据质量与异常测试报告.md'],
          page_break_between=True),
+    # 评审整改 T10：软著/专利受理需线上办理、有审查周期，赛题提交时点无法取得，
+    # 故以《知识产权规划说明》披露拟登记/拟申请内容与依据（评审给出的兜底做法）。
+    dict(out='知识产权规划说明.docx',
+         sources=['docs/15-知识产权规划说明.md'],
+         page_break_between=False),
 ]
 
 # gfm 语义 + 表格 + 代码块 + 删除线 + 任务列表 + 原始 openxml（用于插入分页符）
