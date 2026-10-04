@@ -1,0 +1,12 @@
+{
+  "name": "sp-probe",
+  "private": true,
+  "type": "module",
+  "description": "前端交互的端到端探针（用真实 Chrome 量 DOM，不靠肉眼看）",
+  "scripts": {
+    "setup": "npm i playwright-core"
+  },
+  "dependencies": {
+    "playwright-core": "^1.49.0"
+  }
+}

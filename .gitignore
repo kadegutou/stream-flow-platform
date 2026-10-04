@@ -48,3 +48,6 @@ deliverables/作品演示录像.mp4
 # 脚本运行时生成的请求体临时文件（smoke.sh / fanout-test.sh 每次 cat > 重新生成，
 # 原先误入库且含本机绝对路径，故排除）
 stream-platform/scripts/.*_body.json
+
+# 探针的截图产物与依赖（scripts/probe/README.md）
+stream-platform/scripts/probe/out/
