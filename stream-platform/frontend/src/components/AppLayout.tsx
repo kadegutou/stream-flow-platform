@@ -148,7 +148,11 @@ export default function AppLayout() {
           )}
           {/* Kylin 风格章节导航：激活项展开 + 编号 + 左侧竖条 */}
           {!collapsed && (
-            <nav style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 0' }}>
+            /* overflowX 必须显式 hidden：CSS 里一个轴为 auto 时，另一个轴的 visible 会被算成 auto，
+               于是菜单项 hover 右移 4px 造成的横向溢出会让这里冒出一条横向滚动条
+               （位置正好在最后一条菜单项下方，看着像一根白条）。顺带也把 4px 位移裁在栏内，
+               不让它漏到右侧内容区上。 */
+            <nav style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '8px 0' }}>
               {visibleMenuItems.map((item, i) => {
                 const isActive = selectedKey === item.key;
                 return (
@@ -171,7 +175,9 @@ export default function AppLayout() {
                       cursor: 'pointer',
                       position: 'relative',
                       overflow: 'hidden',
-                      transition: 'height 0.4s cubic-bezier(.22,1,.36,1), background 0.18s, padding 0.35s cubic-bezier(.22,1,.36,1)',
+                      // 内联 transition 会整体覆盖 .sp-sider-item 类里的那条，
+                      // 所以 hover 位移（transform）必须加在这里，否则位移没有过渡、会瞬间跳变
+                      transition: 'height 0.4s cubic-bezier(.22,1,.36,1), background 0.18s, padding 0.35s cubic-bezier(.22,1,.36,1), transform 0.22s cubic-bezier(.22,1,.36,1)',
                       font: 'inherit',
                       color: 'inherit',
                       textAlign: 'left',

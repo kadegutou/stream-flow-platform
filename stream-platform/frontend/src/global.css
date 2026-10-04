@@ -642,29 +642,43 @@ html[data-sp-dark='true'] ::-webkit-scrollbar-thumb:hover {
   75% { transform: translate(6px, -12px) scale(1.1); opacity: 0.5; }
 }
 
-/* 侧边栏菜单项 hover：只改背景色，不做缩放（避免触发布局空隙） */
+/*
+ * 侧边栏菜单项 hover：背景变色 + 向右"抽出"4px（与画布控件栏的 translateX 同一套手感）。
+ *
+ * 为什么是**横向**而不是卡片那种 translateY(-3px)：菜单条又窄又长，鼠标多从右侧进入。
+ * 向右位移是把右边缘推向光标 → 光标更靠内，hover 稳定；
+ * 若用纵向位移，鼠标从下方进入时条目上移会把下边缘推离光标 → hover 失效 → 落回 → 抖动闪烁。
+ *
+ * 注意：这里的 transition 会被按钮上的**内联** transition 整体覆盖（见 AppLayout.tsx），
+ * 所以新增位移时**必须同步把 transform 加进那里的内联列表**，否则位移会瞬间跳变、没有过渡。
+ */
 .sp-sider-item {
-  transition: background 0.18s;
+  transition: background 0.18s, transform 0.22s cubic-bezier(.22,1,.36,1);
 }
 .sp-sider-item:hover {
   background: rgba(255,255,255,0.04);
+  transform: translateX(4px);
 }
 .sp-sider-item.is-active:hover {
   background: rgba(47,84,235,.16);
 }
 
-/* 首页十字光标：隐藏系统光标（body 级，覆盖侧边栏等所有子元素） */
-body:has(.sp-home-crosshair),
-body:has(.sp-home-crosshair) * {
-  cursor: none !important;
-}
-
 /*
- * 非首页的侧边栏十字框：只让菜单条隐藏系统光标（十字框由 SiderCrosshair 绘制），
- * 页面其他区域保持系统默认光标。首页不命中此规则——那时上面那条已全局隐藏光标。
+ * 十字框：只在「会被框住」的元素上隐藏系统光标，页面其余部分一律保持系统默认光标。
+ *
+ * 会被框住的目标只有两类（判据见 Home.tsx 的 CROSSHAIR_TARGETS）：
+ *   .sp-quick-card  首页快捷入口卡片
+ *   .sp-sider-item  侧边栏菜单条
+ * 新增目标时**两处都要改** —— 只改组件不改这里，会出现「框画了、系统光标也还在」。
+ *
+ * 用媒体查询门控：与组件里的 matchMedia 判据保持一致。触屏/粗指针设备上组件不渲染，
+ * 若这里仍然隐藏光标，就会变成「系统光标没了、框也没有」——等于没有光标。
  */
-body:not(:has(.sp-home-crosshair)) .sp-sider-item {
-  cursor: none !important;
+@media (hover: hover) and (pointer: fine) {
+  .sp-quick-card,
+  .sp-sider-item {
+    cursor: none !important;
+  }
 }
 
 /* 像素故障：Kylin 风格，离散 steps 闪烁 */

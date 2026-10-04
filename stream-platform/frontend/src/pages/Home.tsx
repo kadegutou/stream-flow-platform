@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouteTransition } from '../components/RouteTransition';
-import { useThemeStore } from '../store/theme';
+import { useThemeStore, useFontScaleStore } from '../store/theme';
 import { prefersReducedMotion, usePrefersReducedMotion } from '../utils/motion';
 import { homePalette, type HomePalette } from '../theme/home';
 import { SPACING, FONT_SIZE, RADIUS } from '../theme/tokens';
@@ -68,8 +69,9 @@ const NODE_DEFS: Record<NodeType, { labels: string[]; tips: string[] }> = {
     tips: ['Kafka 消息队列', 'CSV 文件读取', 'MySQL 全量同步', 'Excel 文件读取'],
   },
   transform: {
-    labels: ['FILTER', 'MAP', 'CONCAT', 'XML2JSON', 'MASK', 'REDIS'],
-    tips: ['条件过滤', '字段映射', '字段拼接', 'XML↔JSON 转换', '数据脱敏', 'Redis 补数'],
+    // XML 那两个是**独立控件**（XML→JSON / JSON→XML），所以这里标单向，别写成 XML↔JSON
+    labels: ['FILTER', 'MAP', 'CONCAT', 'XML→JSON', 'MASK', 'REDIS'],
+    tips: ['条件过滤', '字段映射', '字段拼接', 'XML 转 JSON', '数据脱敏', 'Redis 补数'],
   },
   sink: {
     labels: ['MYSQL', 'CSV', 'KAFKA', 'HDFS', 'JDBC'],
@@ -90,74 +92,93 @@ function normalRandom(mean: number, sigma: number, min: number, max: number): nu
   return Math.max(min, Math.min(max, Math.round(val)));
 }
 
-/** 节点圆半径（SVG 里 r=32，选中 38） */
+/** 节点圆半径（悬停时 35、选中时 38；碰撞检测按 32 算，故间距要留出放大的余量） */
 const NODE_R = 32;
-/** 两圆最小间距（边缘到边缘） */
-const NODE_GAP = 16;
+/**
+ * 两圆最小间距（边缘到边缘）。
+ * 取 24 而不是 16：节点悬停会放大到 35、选中到 38，鼠标磁吸还会再拉走最多 9 ——
+ * 按 16 算时「选中(38) + 邻居(32) + 磁吸(9)」只剩 1 单位余量，贴边就重合了。
+ */
+const NODE_GAP = 24;
 
-/** 检查候选位置是否与现有节点圆相交 */
+/**
+ * 节点总数上限。
+ * 三条放置带（source/sink 各 144 单位宽、transform 270，高 224）在 88 的硬间距下
+ * 能容纳约 24 个，但节点堆到十几颗时画面已经糊了；更重要的是旧实现没有上限，
+ * 节点会一路涨到放置带装不下的密度，然后落进「放弃碰撞检测」的兜底分支里直接重叠。
+ * 实测重叠出现在 12~14 颗，这里取 10 留足余量。
+ */
+const MAX_NODES = 10;
+
+/**
+ * 悬停提示文字相对节点圆心的 y 偏移。
+ * 注意 SVG 的 <text y> 是**基线**不是文字顶边，11px 字形还要从基线往上伸约 10px，
+ * 所以这个值看着像"离圆心 56"，实际文字顶边在圆心 +46 左右。
+ */
+const TIP_OFFSET = 56;
+/**
+ * 画布底部为提示文字预留的高度 = 偏移(56) + 字高(~14) + 余量(4)。
+ * 不留的话最下面一排节点的提示会被 SVG 的 viewBox 直接裁掉
+ * （实测：最低节点 cy=276.5，文字要到 332.5，而 viewBox 高只有 320）。
+ */
+const TIP_RESERVED = TIP_OFFSET + 18;
+
+/** 检查候选位置是否与现有节点圆相交（含正在淡出的 dying 节点 —— 它们仍在渲染） */
 function collides(x: number, y: number, existing: TopoNode[]): boolean {
   const minDist = NODE_R * 2 + NODE_GAP; // 两圆心最小距离
   return existing.some((n) => Math.hypot(n.x - x, n.y - y) < minDist);
 }
 
-function randomNode(type: NodeType, w: number, h: number, existing: TopoNode[]): TopoNode {
+/**
+ * 在指定类型的放置带里找一个不与现有节点重叠的位置。
+ * **找不到就返回 null**，由调用方跳过这个节点 —— 绝不返回一个会重叠的位置。
+ */
+function randomNode(type: NodeType, w: number, h: number, existing: TopoNode[]): TopoNode | null {
   const defs = NODE_DEFS[type];
   const idx = Math.floor(Math.random() * defs.labels.length);
   const xRange: [number, number] =
     type === 'source' ? [0.06, 0.22] : type === 'transform' ? [0.35, 0.65] : [0.78, 0.94];
 
-  // 网格化均匀分布：把区域分成格子，找空闲格子放置
-  // 格子最小间距必须 ≥ 碰撞距离（NODE_R*2 + NODE_GAP = 80px），否则相邻格子的节点会重叠
-  const cols = 3, rows = 4;
-  const cellW = ((xRange[1] - xRange[0]) * w) / cols;
-  const cellH = (0.7 * h) / rows;
-  const minDist = Math.max(Math.min(cellW, cellH) * 0.55, NODE_R * 2 + NODE_GAP);
+  const minDist = NODE_R * 2 + NODE_GAP;
+  const w0 = xRange[0] * w, w1 = xRange[1] * w;
+  const spanW = w1 - w0;
+  // 放置带的下界不是 0.85h 而是 h - TIP_RESERVED：底部要腾出位置显示提示文字，
+  // 否则最下面一排节点一悬停，文字就超出 viewBox 被裁掉。
+  const bandTop = 0.15 * h;
+  const bandBottom = h - TIP_RESERVED;
+  const spanH = Math.max(0, bandBottom - bandTop);
 
-  // 收集所有空闲格子
-  const freeCells: { cx: number; cy: number }[] = [];
-  for (let c = 0; c < cols; c++) {
-    for (let r = 0; r < rows; r++) {
-      const cx = xRange[0] * w + c * cellW + cellW / 2;
-      const cy = 0.15 * h + r * cellH + cellH / 2;
-      const occupied = existing.some((n) => Math.hypot(n.x - cx, n.y - cy) < minDist);
-      if (!occupied) freeCells.push({ cx, cy });
+  /*
+   * 格子数按 minDist 反推，保证**相邻格心天然就满足间距**。
+   * 旧实现写死 cols=3/rows=4，格心间距只有 48~56（远小于 80）——
+   * 于是放一个节点会连带把相邻几个格子也判为占用，可用格子数骤减，
+   * 很快就跌进后面那段「放弃碰撞检测」的兜底里，直接重叠。
+   */
+  const cols = Math.max(1, Math.floor(spanW / minDist) + 1);
+  const rows = Math.max(1, Math.floor(spanH / minDist) + 1);
+  const stepX = cols > 1 ? spanW / (cols - 1) : 0;
+  const stepY = rows > 1 ? spanH / (rows - 1) : 0;
+  // 抖动幅度：不超过「相邻格心超出硬间距的余量」的一半，抖动后仍大概率满足碰撞检测
+  const jitterX = Math.max(0, (stepX - NODE_R * 2) / 2) * 0.5;
+  const jitterY = Math.max(0, (stepY - NODE_R * 2) / 2) * 0.5;
+
+  // 打乱全部格位后顺序试放：只要带内还有空位就一定找得到，不靠随机碰运气
+  const slots: [number, number][] = [];
+  for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) slots.push([c, r]);
+  for (let i = slots.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [slots[i], slots[j]] = [slots[j], slots[i]];
+  }
+
+  for (const [c, r] of slots) {
+    const x = w0 + c * stepX + (Math.random() - 0.5) * jitterX;
+    // 抖动后必须夹回带内：底部那一排的抖动若把 y 推过 bandBottom，提示文字又会超出 viewBox
+    const y = Math.min(bandBottom, Math.max(bandTop, bandTop + r * stepY + (Math.random() - 0.5) * jitterY));
+    if (!collides(x, y, existing)) {
+      return { id: nextId++, x, y, type, label: defs.labels[idx], tip: defs.tips[idx], opacity: 0 };
     }
   }
-
-  let x = 0, y = 0;
-  let placed = false;
-
-  // 先尝试空闲格子 + 随机偏移，每次检查圆碰撞
-  for (let attempt = 0; attempt < 20 && !placed; attempt++) {
-    if (freeCells.length > 0) {
-      const cell = freeCells[Math.floor(Math.random() * freeCells.length)];
-      const cx = cell.cx + (Math.random() - 0.5) * cellW * 0.4;
-      const cy = cell.cy + (Math.random() - 0.5) * cellH * 0.4;
-      if (!collides(cx, cy, existing)) {
-        x = cx; y = cy; placed = true;
-      }
-    } else {
-      break;
-    }
-  }
-
-  // 兜底：在区域内完全随机，仍检查碰撞
-  for (let attempt = 0; attempt < 30 && !placed; attempt++) {
-    const cx = (xRange[0] + Math.random() * (xRange[1] - xRange[0])) * w;
-    const cy = (0.15 + Math.random() * 0.7) * h;
-    if (!collides(cx, cy, existing)) {
-      x = cx; y = cy; placed = true;
-    }
-  }
-
-  // 最终兜底（极度密集时放弃碰撞检测，几乎不会触发）
-  if (!placed) {
-    x = (xRange[0] + Math.random() * (xRange[1] - xRange[0])) * w;
-    y = (0.15 + Math.random() * 0.7) * h;
-  }
-
-  return { id: nextId++, x, y, type, label: defs.labels[idx], tip: defs.tips[idx], opacity: 0 };
+  return null; // 带内已满
 }
 
 function randomThroughput(): string {
@@ -172,20 +193,26 @@ function generateTopology(
   const nodes: TopoNode[] = [];
   const edges: TopoEdge[] = [];
 
-  // 生成 2-3 条独立链路
+  // 生成 2-3 条独立链路。放不下时少生成一条，绝不放置重叠节点
   const chains = 2 + Math.floor(Math.random() * 2);
   for (let c = 0; c < chains; c++) {
+    if (nodes.length >= MAX_NODES) break;
     const src = randomNode('source', w, h, nodes);
+    if (!src) break;
     nodes.push(src);
     const midCount = 1 + Math.floor(Math.random() * 2);
     let prev = src;
     for (let m = 0; m < midCount; m++) {
+      if (nodes.length >= MAX_NODES) break;
       const mid = randomNode('transform', w, h, nodes);
+      if (!mid) break;
       nodes.push(mid);
       edges.push({ from: prev.id, to: mid.id, throughput: randomThroughput() });
       prev = mid;
     }
+    if (nodes.length >= MAX_NODES) break;
     const snk = randomNode('sink', w, h, nodes);
+    if (!snk) break;
     nodes.push(snk);
     edges.push({ from: prev.id, to: snk.id, throughput: randomThroughput() });
   }
@@ -193,8 +220,10 @@ function generateTopology(
   // 额外节点也和最近节点连线，保证无孤立
   const extra = 1 + Math.floor(Math.random() * 2);
   for (let i = 0; i < extra; i++) {
+    if (nodes.length >= MAX_NODES) break;
     const types: NodeType[] = ['source', 'transform', 'sink'];
     const n = randomNode(types[Math.floor(Math.random() * 3)], w, h, nodes);
+    if (!n) break;
     nodes.push(n);
     // 和最近节点连线
     const others = nodes.filter((o) => o.id !== n.id);
@@ -310,9 +339,14 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
             setTopo((prev) => {
               const nodes = [...prev.nodes];
               const edges = [...prev.edges];
-              for (let i = 0; i < count; i++) {
+              // 总数封顶：旧实现没有上限，节点会一路涨到放置带装不下的密度，
+              // 然后落进「放弃碰撞检测」的兜底里直接重叠（实测 12~14 颗时开始出现）。
+              const room = Math.max(0, MAX_NODES - nodes.length);
+              const take = Math.min(count, room);
+              for (let i = 0; i < take; i++) {
                 const types: NodeType[] = ['source', 'transform', 'sink'];
                 const newNode = randomNode(types[Math.floor(Math.random() * 3)], W, H, nodes);
+                if (!newNode) break; // 带内已满：少加几个，不放重叠节点
                 nodes.push(newNode);
                 // 和最近节点连线
                 const others = nodes.filter((n) => n.id !== newNode.id && !n.dying);
@@ -414,7 +448,7 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
     const svg = svgRef.current;
     if (!svg) return;
 
-    const ACQUIRE = 34;  // 光标进入该半径即吸附（SVG 坐标，节点 r=22）
+    const ACQUIRE = 34;  // 光标进入该半径即吸附（SVG 坐标；节点 r=32，悬停 35）
     const MAX_PULL = 9;  // 节点最大位移（px）
     const LERP = 0.18;   // 平滑系数
 
@@ -639,9 +673,16 @@ function TopoGraph({ palette }: { palette: HomePalette }) {
               {n.label}
             </text>
             {(isSelected || isHovered) && (
+              /*
+               * y 是**基线**不是文字顶边：11px 的字形还要从基线往上伸约 10px。
+               * 原先写 +40，看着像"圆心往下 40"，实际文字顶边落在圆心 +30 —— 比悬停圆的
+               * 下沿（+35）还高，实测与圆**重叠 5.7px**。
+               * +56 是实测调出来的：几何间隙约 11px（+60 时是 15.7px，视觉上偏远）。
+               * 再调就往 52~58 之间挪，别再回到 40 附近 —— 那里会重新压住圆。
+               */
               <text
                 x={n.x}
-                y={n.y + 40}
+                y={n.y + TIP_OFFSET}
                 textAnchor="middle"
                 fill={textColor}
                 fontSize="11"
@@ -738,42 +779,59 @@ function GlitchBlocks({ dark }: { dark: boolean }) {
 
 /* ========== 十字光标（Kylin 风格，仅首页） ========== */
 
-/** 光标状态：默认小十字 / 包住目标元素 */
-interface CursorState {
+/** 被框住的目标元素的包围盒 */
+interface TargetRect {
   x: number;
   y: number;
-  /** 目标元素的包围盒（有则四角分开包住） */
-  targetRect: { x: number; y: number; w: number; h: number } | null;
+  w: number;
+  h: number;
 }
+
+/**
+ * 只在鼠标压住「快捷入口卡片」或「侧边栏菜单条」时，用四角括号把目标框住。
+ *
+ * **常态是系统普通光标** —— 本组件不再画跟随鼠标的小十字，也不再全局隐藏光标；
+ * 隐藏范围只覆盖 .sp-quick-card / .sp-sider-item（见 global.css 里那条 media 规则）。
+ * 这两者的 class 是唯一的"可被框住"的判据，加新的目标就改 CROSSHAIR_TARGETS
+ * 并在 global.css 同步加一条 cursor:none，否则会出现「框画了、光标还在」。
+ */
+const CROSSHAIR_TARGETS = '.sp-quick-card, .sp-sider-item';
 
 function CrosshairCursor({ dark }: { dark: boolean }) {
   const cursorRef = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-  const [state, setState] = useState<CursorState>({ x: 0, y: 0, targetRect: null });
+  // rect 保留"最后一次框住的目标"：移出目标时靠它做淡出，而不是瞬间跳到 0 尺寸
+  const [rect, setRect] = useState<TargetRect | null>(null);
+  /** 当前是否正压在被框住的目标上 */
+  const [over, setOver] = useState(false);
+  // 必须放在下方 early return 之前：hooks 不能有条件地调用
+  const z = useFontScaleStore((s) => s.scale) || 1;
+
+  /** 当前悬停的目标元素，供下面的逐帧重同步使用 */
+  const targetRef = useRef<Element | null>(null);
+  /** 把元素矩形写进 state；值没变时返回原对象，React 会跳过重渲染（rAF 每帧调用也需要它） */
+  const syncRect = useCallback((el: Element) => {
+    const r = el.getBoundingClientRect();
+    setRect((prev) =>
+      prev && prev.x === r.left && prev.y === r.top && prev.w === r.width && prev.h === r.height
+        ? prev
+        : { x: r.left, y: r.top, w: r.width, h: r.height },
+    );
+  }, []);
 
   useEffect(() => {
     if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
 
     const onMove = (e: MouseEvent) => {
-      setVisible(true);
-      const target = e.target as HTMLElement;
-      // 检测可交互元素：按钮、链接、卡片、侧边栏菜单项
-      const interactive = target.closest(
-        'button, a, [role="button"], input, .sp-quick-card, .sp-sider-item, svg circle',
-      );
-
-      if (interactive) {
-        const rect = interactive.getBoundingClientRect();
-        setState({
-          x: e.clientX,
-          y: e.clientY,
-          targetRect: { x: rect.left, y: rect.top, w: rect.width, h: rect.height },
-        });
-      } else {
-        setState({ x: e.clientX, y: e.clientY, targetRect: null });
+      const el = (e.target as HTMLElement | null)?.closest?.(CROSSHAIR_TARGETS) ?? null;
+      targetRef.current = el;
+      if (!el) {
+        setOver(false); // 移出目标：淡出；保留 rect 供过渡使用
+        return;
       }
+      syncRect(el);
+      setOver(true);
     };
-    const onLeave = () => setVisible(false);
+    const onLeave = () => { targetRef.current = null; setOver(false); };
 
     document.addEventListener('mousemove', onMove);
     document.documentElement.addEventListener('mouseleave', onLeave);
@@ -781,59 +839,74 @@ function CrosshairCursor({ dark }: { dark: boolean }) {
       document.removeEventListener('mousemove', onMove);
       document.documentElement.removeEventListener('mouseleave', onLeave);
     };
-  }, []);
+  }, [syncRect]);
+
+  /*
+   * 悬停期间逐帧重读目标矩形。
+   * 只在 mousemove 时读会让框滞后于"会动的目标"：菜单条 hover 有 0.22s 位移过渡、
+   * 激活项点击后还有 0.4s 高度展开动画，这期间框会钉在旧位置，要等下一次鼠标移动才归位。
+   * 值没变时 syncRect 返回原对象，React 直接跳过重渲染，所以空转的帧不产生渲染开销。
+   */
+  useEffect(() => {
+    if (!over) return;
+    let raf = 0;
+    const tick = () => {
+      if (targetRef.current) syncRect(targetRef.current);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [over, syncRect]);
 
   if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return null;
+  if (!rect) return null; // 还没框过任何目标：什么都不画，系统光标正常
 
   const color = dark ? 'rgba(255,255,255,.75)' : 'rgba(0,0,0,.6)';
-  const dotColor = dark ? '#fff' : '#000';
   const GAP = 4; // 四角和目标边缘的间距
   const CORNER = 8; // 角括号边长
 
-  // 有目标时：四角分开包住目标；无目标时：小十字跟随光标
-  const t = state.targetRect;
-  const w = t ? t.w + GAP * 2 : 20;
-  const h = t ? t.h + GAP * 2 : 20;
-  const cx = t ? t.x + t.w / 2 : state.x;
-  const cy = t ? t.y + t.h / 2 : state.y;
+  /*
+   * 字体缩放用 body{zoom:z} 实现（见 store/theme.ts），本层是 body 的 fixed 后代，
+   * 会被那个 zoom **再乘一次** —— 实测「框实际画出 = 传入值 × z」，z=1.3 时整整偏出 335px。
+   * 而 getBoundingClientRect() 返回的已经是乘过 zoom 的视觉坐标，所以这里把要写进样式的
+   * 尺寸与位移**一律除以 z** 还原成层内坐标，渲染出来才等于视觉值。
+   * 层内的常量（角括号、边框、中心点）同样要除，否则它们会跟着变粗变大。
+   * z 取自 store 而非 getComputedStyle：缩放变化时会触发重渲染，取到的一定是最新值。
+   */
+  const vis = (v: number) => v / z;
 
-  return (
+  // 四角分开包住目标
+  const w = rect.w + GAP * 2;
+  const h = rect.h + GAP * 2;
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+
+  // portal 到 body：本组件挂在被内容区包着的 Home 里，而 position:fixed 的包含块会被
+  // 带 transform 的祖先劫持 —— 页面入场动画（.sp-page-enter 的 sp-page-in，前 ~400ms）
+  // 期间框的原点会从视口跳到内容区原点，切页后立刻移鼠标能看到框闪一下。挂到 body 后消失。
+  return createPortal(
     <div
       ref={cursorRef}
       style={{
         position: 'fixed',
         top: 0,
         left: 0,
-        width: w,
-        height: h,
+        width: vis(w),
+        height: vis(h),
         pointerEvents: 'none',
         zIndex: 9999,
-        opacity: visible ? 1 : 0,
+        opacity: over ? 1 : 0,
         transition: 'opacity 0.15s, width 0.2s ease-out, height 0.2s ease-out',
-        transform: `translate(${cx - w / 2}px, ${cy - h / 2}px)`,
+        transform: `translate(${vis(cx - w / 2)}px, ${vis(cy - h / 2)}px)`,
       }}
     >
       {/* 四个角括号 */}
-      <span style={{ position: 'absolute', top: 0, left: 0, width: CORNER, height: CORNER, borderTop: `2px solid ${color}`, borderLeft: `2px solid ${color}` }} />
-      <span style={{ position: 'absolute', top: 0, right: 0, width: CORNER, height: CORNER, borderTop: `2px solid ${color}`, borderRight: `2px solid ${color}` }} />
-      <span style={{ position: 'absolute', bottom: 0, left: 0, width: CORNER, height: CORNER, borderBottom: `2px solid ${color}`, borderLeft: `2px solid ${color}` }} />
-      <span style={{ position: 'absolute', bottom: 0, right: 0, width: CORNER, height: CORNER, borderBottom: `2px solid ${color}`, borderRight: `2px solid ${color}` }} />
-      {/* 中心点（包住目标时隐藏） */}
-      <span
-        style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          width: 3,
-          height: 3,
-          background: dotColor,
-          transform: 'translate(-50%, -50%) rotate(45deg)',
-          boxShadow: `0 0 8px ${dotColor}`,
-          opacity: t ? 0 : 1,
-          transition: 'opacity 0.15s',
-        }}
-      />
-    </div>
+      <span style={{ position: 'absolute', top: 0, left: 0, width: vis(CORNER), height: vis(CORNER), borderTop: `${vis(2)}px solid ${color}`, borderLeft: `${vis(2)}px solid ${color}` }} />
+      <span style={{ position: 'absolute', top: 0, right: 0, width: vis(CORNER), height: vis(CORNER), borderTop: `${vis(2)}px solid ${color}`, borderRight: `${vis(2)}px solid ${color}` }} />
+      <span style={{ position: 'absolute', bottom: 0, left: 0, width: vis(CORNER), height: vis(CORNER), borderBottom: `${vis(2)}px solid ${color}`, borderLeft: `${vis(2)}px solid ${color}` }} />
+      <span style={{ position: 'absolute', bottom: 0, right: 0, width: vis(CORNER), height: vis(CORNER), borderBottom: `${vis(2)}px solid ${color}`, borderRight: `${vis(2)}px solid ${color}` }} />
+    </div>,
+    document.body,
   );
 }
 
