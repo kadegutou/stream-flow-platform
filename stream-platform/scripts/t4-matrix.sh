@@ -111,6 +111,16 @@ else
   )
 fi
 
+# 外部格位清单：设了 T4_CELLS_FILE 就用它替代内置矩阵，便于做隔离实验。
+# 每行格式：数据路径 行数 并行度 worker数 格位名
+if [ -n "${T4_CELLS_FILE:-}" ]; then
+  if [ ! -f "$T4_CELLS_FILE" ]; then
+    echo "!! T4_CELLS_FILE 指向的文件不存在：$T4_CELLS_FILE"; exit 1
+  fi
+  mapfile -t CELLS < "$T4_CELLS_FILE"
+  echo "*** 使用外部格位清单 $T4_CELLS_FILE（${#CELLS[@]} 格）***"
+fi
+
 for cell in "${CELLS[@]}"; do
   set -- $cell
   DATA=$1; ROWS=$2; PAR=$3; WK=$4; NAME=$5
@@ -126,6 +136,11 @@ for cell in "${CELLS[@]}"; do
     echo "  iostat 采样已启动 -> t4-iostat-$NAME.txt"
   fi
 
+  # 每个格位都采 CPU。用于判断「并发收益何时反转」：看 run-queue 是否超过 vCPU 数
+  # （超了就是 CPU 超配），以及 %sy / 上下文切换是否飙升。
+  vmstat 1 > "$LOGDIR/t4-vmstat-$NAME.txt" 2>&1 &
+  VMSTAT_PID=$!
+
   # 预热一次并丢弃。上一轮实测：每格首次运行普遍最慢（页缓存冷、worker JVM 冷、
   # JIT 未热身），会把中位数和加速比都拉偏。预热结果不进入汇总。
   run_one "$DATA" "$ROWS" "$PAR" "$NAME-warmup"
@@ -136,6 +151,7 @@ for cell in "${CELLS[@]}"; do
   done
 
   [ -n "$IOSTAT_PID" ] && { kill "$IOSTAT_PID" 2>/dev/null; wait "$IOSTAT_PID" 2>/dev/null; }
+  kill "$VMSTAT_PID" 2>/dev/null; wait "$VMSTAT_PID" 2>/dev/null
 done
 
 echo
