@@ -279,9 +279,12 @@ def fig_er():
 def fig_perf():
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.6))
     fig.patch.set_facecolor('white')
-    cfgs = ['1000万\np1 (1 Worker)', '1000万\np4 (1 Worker)', '1000万\np6 (3 Worker)', '5000万\np6 (3 Worker)']
-    secs = [49.0, 28.5, 28.6, 90.0]
-    tput = [20.4, 35.1, 35.0, 55.6]
+    # 数据来源：2026-10-04 T4 重跑批次（每格 1 次预热 + 3 次取中位数），权威口径见 docs/05 §4.2。
+    # † 该格跨批次不稳定：另一批次以同配置（6 分片 / 1 Worker）测得 26.4s，与 4 分片持平。
+    #   证据只支持「提升到 6 分片无额外收益」，不支持「6 分片更慢」，故单列并加注说明。
+    cfgs = ['1000万\np1 (1 Worker)', '1000万\np4 (1 Worker)', '1000万\np6 (3 Worker) †', '5000万\np6 (3 Worker)']
+    secs = [38.5, 16.2, 35.6, 50.8]
+    tput = [26.0, 61.7, 28.1, 98.4]
     colors = ['#8c8c8c', C_CP, '#597ef7', C_OK]
 
     ax = axes[0]
@@ -304,19 +307,24 @@ def fig_perf():
     ax.grid(axis='y', ls=':', color='#d9d9d9')
     ax.set_axisbelow(True)
     ax.tick_params(labelsize=8.2)
-    ax.set_ylim(0, 70)
+    ax.set_ylim(0, 130)
     for r, v in zip(b, tput):
-        ax.text(r.get_x() + r.get_width() / 2, v + 1.2, f'{v}', ha='center',
+        ax.text(r.get_x() + r.get_width() / 2, v + 2.4, f'{v}', ha='center',
                 fontsize=8.8, color=C_TXT, weight='bold')
-    ax.annotate('加速比 1.7×', xy=(1, 35.1), xytext=(0.45, 51), fontsize=9.4, color=C_WARN,
+    # 箭头指向柱体右侧而非柱顶，避开柱顶的数值标签，防止压字
+    ax.annotate('加速比 2.4×', xy=(1.30, 52), xytext=(0.42, 90), fontsize=9.4, color=C_WARN,
                 weight='bold', arrowprops=dict(arrowstyle='->', color=C_WARN, lw=1.3))
-    ax.annotate('加速比 2.8×', xy=(3, 55.6), xytext=(2.30, 66), fontsize=9.4, color=C_WARN,
+    ax.annotate('加速比 3.3×', xy=(3.30, 86), xytext=(2.42, 114), fontsize=9.4, color=C_WARN,
                 weight='bold', arrowprops=dict(arrowstyle='->', color=C_WARN, lw=1.3))
     for s in ('top', 'right'):
         ax.spines[s].set_visible(False)
 
-    fig.suptitle('横向扩展实测（基准环境：8 vCPU / 24GB / 300GB SSD　·　场景 csv→拼接→csv）',
+    fig.suptitle('横向扩展实测（测试机 A：8 vCPU / 24GB / 300GB 虚拟磁盘　·　场景 csv→拼接→csv）',
                  fontsize=11.5, color=C_TXT, y=1.03)
+    fig.text(0.5, -0.04,
+             '† 该格跨批次不稳定：另一批次同配置（6 分片 / 1 Worker）测得 26.4s，与 4 分片持平。'
+             '证据只支持「提升到 6 分片无额外收益」，见《性能测试报告》§4.2。',
+             ha='center', fontsize=7.6, color=C_LINE)
     fig.tight_layout()
     save(fig, 'fig-06-横向扩展.png')
 

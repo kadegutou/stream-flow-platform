@@ -195,7 +195,7 @@ frontend/nginx.conf           # /api 反代 + history 路由 fallback
 | 虚拟化 | VMware Workstation 17 虚拟机 | — |
 | CPU | 8 vCPU | `lscpu` |
 | 内存 | 24 GB | `free -h` |
-| 磁盘 | 300 GB 虚拟磁盘（NVMe SSD，ROTA=0） | `lsblk -d -o NAME,ROTA,SIZE` |
+| 磁盘 | 300 GB 虚拟磁盘；宿主为 NVMe SSD。**该虚拟盘 `lsblk` 报 `ROTA=1`，与真实介质不符**，见下方消歧说明 | `lsblk -d -o NAME,ROTA,SIZE` + 宿主磁盘型号 |
 | 操作系统 | Ubuntu Server 24.04.4 LTS | `cat /etc/os-release` |
 | Docker | 29.1 | `docker version` |
 | Docker Compose | v2.40 | `docker compose version` |
@@ -219,10 +219,16 @@ frontend/nginx.conf           # /api 反代 + history 路由 fallback
 > `MemTotal 28407588 kB` = **28.4 GB（十进制）** = **27.09 GiB（二进制）**。
 > 因此文档中出现的 27GB 与 28.4GB **都指测试机 B**，不是两台机器。
 
-> **关于磁盘类型的消歧**：赛题建议基准为"8vCPU / 32GB / 机械硬盘"。测试机 A 的宿主仅有一块
-> NVMe SSD、无机械硬盘，故 A 的虚拟磁盘为 SSD（性能高于机械盘）；测试机 B 为 ROTA=1 机械盘，
-> 更接近赛题基准。磁盘类型以 `lsblk` 的 `ROTA` 字段为准（**注意**：虚拟机中该字段不一定反映
-> 真实介质，故同时给出宿主磁盘型号供核对）。
+> **关于磁盘类型的消歧（请连同实测输出一起看）**：赛题建议基准为「8vCPU / 32GB / 机械硬盘」。
+>
+> - **测试机 A**：宿主仅有一块 NVMe SSD、无机械硬盘，故虚拟磁盘为 SSD（性能高于机械盘）。
+>   **注意：在该虚拟机上执行 `lsblk -d -o NAME,ROTA,SIZE`，`sda` 的 `ROTA` 字段实际报 `1`**
+>   （即"可旋转"），与真实介质不符 —— 这是虚拟化层的常见现象，`ROTA` 由虚拟驱动上报而非
+>   物理设备，**不能作为判据**。所以本表的磁盘类型以**宿主磁盘型号**为准，不采信 `ROTA`。
+> - **测试机 B**：`ROTA=1` 且宿主为机械盘，两处一致，故判定为机械盘，更接近赛题基准。
+>
+> 也就是说：`ROTA` 在两台机器上取值不同（A=1、B=1）但**介质实际不同**，因此本作品不把
+> `ROTA` 当作磁盘类型的唯一判据，而是结合宿主型号一并给出。
 
 ### 8.3 引用规则
 
