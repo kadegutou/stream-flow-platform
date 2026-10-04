@@ -1,0 +1,28 @@
+# 统一行尾策略。
+#
+# 背景（本项目实际踩过的两个坑）：
+#  1. Windows 检出时 core.autocrlf=true 会把文本文件写成 CRLF，于是 pack_source.py
+#     打的源码包里混进 CRLF，而外层源码树是 LF —— 同一份代码两种行尾，评审复验抓到 22 处。
+#  2. 拷到 Linux 的 shell 脚本若是 CRLF，`set -euo pipefail` 会报
+#     `set: pipefail: invalid option name`（脚本直接跑不起来）。
+#
+# 所以：仓库一律存 LF、检出也一律写 LF，与平台无关。
+
+* text=auto eol=lf
+
+# Windows 批处理按惯例保留 CRLF（cmd.exe 对 LF 的兼容性不稳）
+*.bat text eol=crlf
+
+# 二进制：明确声明，避免被当成文本处理
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.docx  binary
+*.xlsx  binary
+*.zip   binary
+*.gz    binary
+*.mp4   binary
+*.jar   binary
+*.keystore binary

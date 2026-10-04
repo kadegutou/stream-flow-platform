@@ -99,10 +99,31 @@ def main():
     if '--check' in sys.argv:
         return check(files)
 
+    # 文本文件统一按 LF 入库。工作区若是 CRLF（Windows 上 core.autocrlf=true 检出常见），
+    # 直接 z.write 会把 CRLF 带进包里，与外层源码树不一致 —— 评审复验抓到过 22 处。
+    # 二进制原样写入，误做行尾替换会损坏文件。
+    binary_ext = ('.png', '.jpg', '.jpeg', '.gif', '.ico', '.docx', '.xlsx', '.zip',
+                  '.gz', '.mp4', '.jar', '.pdf', '.woff', '.woff2', '.ttf')
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    normalized = 0
     with zipfile.ZipFile(OUT, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         for full, rel in files:
-            z.write(full, 'stream-platform/' + rel)
+            with open(full, 'rb') as fh:
+                data = fh.read()
+            if not rel.lower().endswith(binary_ext):
+                fixed = data.replace(b'\r\n', b'\n')
+                if fixed != data:
+                    normalized += 1
+                data = fixed
+            # 保留原文件时间戳：--check 靠 zip 条目时间与磁盘 mtime 的差值判断是否落后，
+            # 用 writestr 默认的「当前时间」会让体检永远通过、失去意义。
+            info = zipfile.ZipInfo('stream-platform/' + rel,
+                                   date_time=time.localtime(os.path.getmtime(full))[:6])
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            z.writestr(info, data)
+    if normalized:
+        print(f'行尾归一化: {normalized} 个文件由 CRLF 转为 LF')
 
     java = [r for _, r in files if r.endswith('.java')]
     ts = [r for _, r in files if r.endswith(('.ts', '.tsx'))]

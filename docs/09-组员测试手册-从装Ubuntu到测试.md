@@ -250,8 +250,11 @@ curl -s -X POST http://localhost:8080/api/auth/login \
 
 **SQL 强删卡住的作业**（慎用）：
 
+> 🔒 命令里的 `$MYSQL_PWD` 是**占位符**：先 `export MYSQL_PWD=<MySQL 口令>`
+> （开发默认值定义在 `stream-platform/deploy/docker-compose.yml`）。`<作业ID>` 也要换成实际值。
+
 ```bash
-docker exec -i stream-platform-mysql-1 mysql -uroot -proot123 stream_platform <<'SQL'
+docker exec -i stream-platform-mysql-1 mysql -uroot -p"$MYSQL_PWD" stream_platform <<'SQL'
 DELETE FROM sp_job_shard WHERE instance_id IN (SELECT id FROM sp_job_instance WHERE job_id = <作业ID>);
 DELETE FROM sp_job_instance WHERE job_id = <作业ID>;
 DELETE FROM sp_job WHERE id = <作业ID>;
