@@ -1,0 +1,3 @@
+NAME ROTA  SIZE
+sda     1  300G
+sr0     1  3.1G
