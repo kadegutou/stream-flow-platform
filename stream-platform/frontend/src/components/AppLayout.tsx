@@ -286,8 +286,9 @@ export default function AppLayout() {
           />
         )}
       </div>
-      {/* 首页之外的侧边栏十字框：只框菜单条，首页由 Home 自己的十字框接管 */}
-      <SiderCrosshair dark={dark} />
+      {/* 首页之外的侧边栏十字框：只框菜单条，首页由 Home 自己的十字框接管。
+          侧边栏恒为深色，故组件内部固定用浅色框，不需要传 dark。 */}
+      <SiderCrosshair />
       <Layout>
         <Header
           style={{

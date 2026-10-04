@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { useFontScaleStore } from '../store/theme';
+import { frameBoxOf, type FrameBox } from '../utils/crosshair';
 
 /**
  * 侧边栏专用十字框：鼠标悬停在菜单条上时，四角括号把这一条框住。
@@ -13,22 +14,13 @@ import { useFontScaleStore } from '../store/theme';
  * 系统光标的隐藏见 global.css 的 `body:not(:has(.sp-home-crosshair)) .sp-sider-item`：
  * 只管菜单条，页面其他区域保持默认光标。
  */
-interface ItemRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-/** 四角和目标边缘的间距 */
-const GAP = 4;
 /** 角括号边长 */
 const CORNER = 8;
 
-export default function SiderCrosshair({ dark }: { dark: boolean }) {
+export default function SiderCrosshair() {
   const { pathname } = useLocation();
   const isHome = pathname.startsWith('/home');
-  const [rect, setRect] = useState<ItemRect | null>(null);
+  const [rect, setRect] = useState<FrameBox | null>(null);
   // 必须放在下方 early return 之前：isHome 随路由变化，若把 hooks 放在 return 之后，
   // 从 /jobs 切到 /home 时 hook 数量会变，React 会直接抛错。
   const z = useFontScaleStore((s) => s.scale) || 1;
@@ -36,11 +28,13 @@ export default function SiderCrosshair({ dark }: { dark: boolean }) {
   const targetRef = useRef<Element | null>(null);
   /** 矩形没变时返回原对象，React 跳过重渲染 —— 逐帧重同步靠它避免空转渲染 */
   const syncRect = useCallback((el: Element) => {
-    const r = el.getBoundingClientRect();
+    // frameBoxOf 已把间距算进去，并把框夹在侧边栏矩形内（菜单条 hover 右移会越过侧边栏，
+    // 框若不夹就会落到右侧内容区上 —— 浅色模式下那里是白底，白框压白底看不见）
+    const box = frameBoxOf(el);
     setRect((prev) =>
-      prev && prev.x === r.left && prev.y === r.top && prev.w === r.width && prev.h === r.height
+      prev && prev.x === box.x && prev.y === box.y && prev.w === box.w && prev.h === box.h
         ? prev
-        : { x: r.left, y: r.top, w: r.width, h: r.height },
+        : box,
     );
   }, []);
 
@@ -83,9 +77,17 @@ export default function SiderCrosshair({ dark }: { dark: boolean }) {
   if (isHome) return null;
   if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return null;
 
-  const color = dark ? 'rgba(255,255,255,.75)' : 'rgba(0,0,0,.6)';
-  const w = rect ? rect.w + GAP * 2 : 0;
-  const h = rect ? rect.h + GAP * 2 : 0;
+  /*
+   * 恒定浅色，**不看主题**：侧边栏在浅色/深色两套调色板里用的是同一个深蓝渐变
+   * （palette.ts 的 brandDeepGradient，两处都是 #141e30 → #243b55）。
+   * 按主题取色时，浅色模式会画成黑色落在深蓝上，实测对比度仅 1.16:1（等于看不见）；
+   * 换成 rgba(255,255,255,.75) 后对比度 10.1:1。
+   * 这也是本组件不再接收 dark prop 的原因 —— 它只框侧边栏，没有第二种情况。
+   */
+  const color = 'rgba(255,255,255,.75)';
+  // rect 已是"框"的矩形（间距含在内），此处不再加
+  const w = rect ? rect.w : 0;
+  const h = rect ? rect.h : 0;
   const cx = rect ? rect.x + rect.w / 2 : 0;
   const cy = rect ? rect.y + rect.h / 2 : 0;
 

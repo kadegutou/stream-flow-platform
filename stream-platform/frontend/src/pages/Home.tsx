@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useRouteTransition } from '../components/RouteTransition';
 import { useThemeStore, useFontScaleStore } from '../store/theme';
 import { prefersReducedMotion, usePrefersReducedMotion } from '../utils/motion';
+import { frameBoxOf, type FrameBox } from '../utils/crosshair';
 import { homePalette, type HomePalette } from '../theme/home';
 import { SPACING, FONT_SIZE, RADIUS } from '../theme/tokens';
 import { listJobs } from '../api/jobs';
@@ -779,12 +780,10 @@ function GlitchBlocks({ dark }: { dark: boolean }) {
 
 /* ========== 十字光标（Kylin 风格，仅首页） ========== */
 
-/** 被框住的目标元素的包围盒 */
-interface TargetRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
+/** 框的包围盒（已含间距，由 frameBoxOf 算好）＋ 取色所需的标记 */
+interface TargetRect extends FrameBox {
+  /** 目标是否在侧边栏上 —— 决定框用浅色还是主题色，见下方 color 的取值 */
+  onSidebar: boolean;
 }
 
 /**
@@ -810,11 +809,14 @@ function CrosshairCursor({ dark }: { dark: boolean }) {
   const targetRef = useRef<Element | null>(null);
   /** 把元素矩形写进 state；值没变时返回原对象，React 会跳过重渲染（rAF 每帧调用也需要它） */
   const syncRect = useCallback((el: Element) => {
-    const r = el.getBoundingClientRect();
+    // frameBoxOf 已把间距算进去（侧边栏目标还会夹在侧边栏矩形内，见 utils/crosshair.ts）
+    const box = frameBoxOf(el);
+    const onSidebar = el.matches('.sp-sider-item');
     setRect((prev) =>
-      prev && prev.x === r.left && prev.y === r.top && prev.w === r.width && prev.h === r.height
+      prev && prev.x === box.x && prev.y === box.y && prev.w === box.w && prev.h === box.h &&
+      prev.onSidebar === onSidebar
         ? prev
-        : { x: r.left, y: r.top, w: r.width, h: r.height },
+        : { ...box, onSidebar },
     );
   }, []);
 
@@ -861,8 +863,14 @@ function CrosshairCursor({ dark }: { dark: boolean }) {
   if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return null;
   if (!rect) return null; // 还没框过任何目标：什么都不画，系统光标正常
 
-  const color = dark ? 'rgba(255,255,255,.75)' : 'rgba(0,0,0,.6)';
-  const GAP = 4; // 四角和目标边缘的间距
+  /*
+   * 框色不能只看主题：**侧边栏在浅色/深色两套调色板里用的是同一个深蓝渐变**
+   * （palette.ts 的 brandDeepGradient，两处都是 #141e30 → #243b55）。
+   * 浅色模式下按主题画成黑色，落在深蓝上实测对比度只有 1.16:1 —— 等于看不见。
+   * 所以侧边栏上的目标恒用浅色；首页卡片本身随主题深浅（浅色白底 / 深色深底），跟随主题即可。
+   * onSidebar 存的是布尔而非颜色，这样切主题时重渲染能立刻拿到新值、不会残留旧色。
+   */
+  const color = rect.onSidebar || dark ? 'rgba(255,255,255,.75)' : 'rgba(0,0,0,.6)';
   const CORNER = 8; // 角括号边长
 
   /*
@@ -875,11 +883,10 @@ function CrosshairCursor({ dark }: { dark: boolean }) {
    */
   const vis = (v: number) => v / z;
 
-  // 四角分开包住目标
-  const w = rect.w + GAP * 2;
-  const h = rect.h + GAP * 2;
-  const cx = rect.x + rect.w / 2;
-  const cy = rect.y + rect.h / 2;
+  // 四角分开包住目标（rect 已是"框"的矩形，间距含在内，此处不再加）
+  const { w, h } = rect;
+  const cx = rect.x + w / 2;
+  const cy = rect.y + h / 2;
 
   // portal 到 body：本组件挂在被内容区包着的 Home 里，而 position:fixed 的包含块会被
   // 带 transform 的祖先劫持 —— 页面入场动画（.sp-page-enter 的 sp-page-in，前 ~400ms）
