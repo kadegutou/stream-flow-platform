@@ -44,3 +44,7 @@ sp-src.tar.gz
 
 # 演示录像：体积大（128MB）且改版频繁，不入库，交付时单独发送
 deliverables/作品演示录像.mp4
+
+# 脚本运行时生成的请求体临时文件（smoke.sh / fanout-test.sh 每次 cat > 重新生成，
+# 原先误入库且含本机绝对路径，故排除）
+stream-platform/scripts/.*_body.json

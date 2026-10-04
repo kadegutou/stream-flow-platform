@@ -171,7 +171,7 @@ export const JOB_TEMPLATES: JobTemplate[] = [
     key: 'bench-50m',
     name: '示例：5000 万行性能基准',
     description:
-      '5000 万行 CSV（5.6GB），并行度 6。性能测试主场景，需 3 个 Worker 才能跑满；'
+      '5000 万行 CSV（5.9GB），并行度 6。性能测试主场景，需 3 个 Worker 才能跑满；'
       + '输出为 6 个分片文件，行数校验应等于 5000 万 + 6 行表头。',
     parallelism: 6,
     flow: 'CSV 输入(5000万) → 字段拼接 → CSV 输出（6 分片并行）',
