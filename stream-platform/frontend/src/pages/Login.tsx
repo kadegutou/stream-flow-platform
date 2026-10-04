@@ -23,7 +23,7 @@ const LOGIN = palette(true);
 
 const FEATURES = [
   { icon: <ApartmentOutlined />, text: '拖拽式数据流编排，20 种内置控件' },
-  { icon: <ThunderboltOutlined />, text: '虚拟线程流水线，55.6 万行/秒吞吐' },
+  { icon: <ThunderboltOutlined />, text: '虚拟线程流水线，单机吞吐数十万行/秒' },
   { icon: <PartitionOutlined />, text: 'Worker 集群横向扩展，故障自动自愈' },
 ];
 
